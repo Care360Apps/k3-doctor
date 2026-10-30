@@ -1,0 +1,62 @@
+name: K3 offline Android APK (synthetic services; not clinical)
+on:
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: k3-offline-apk-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  android-sandbox:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verify source has no sensitive build files
+        run: |
+          python3 tools/k3_preflight.py
+          python3 tools/k3_notification_preflight.py
+      - name: Verify Gradle Wrapper
+        uses: gradle/actions/wrapper-validation@v6
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.38.3'
+          channel: stable
+          cache: true
+      - name: Enable Swift Package Manager (needed to resolve Paystack plugin metadata)
+        run: flutter config --enable-swift-package-manager
+      - name: Create synthetic offline-only Firebase/API config and unique debug app ID
+        run: python3 tools/k3_offline_build_fixture.py
+      - name: Resolve Flutter packages
+        run: flutter pub get
+      - name: Generate retrofit code
+        run: dart run build_runner build --delete-conflicting-outputs
+      - name: Preserve environment-defined Retrofit base URL
+        run: python3 tools/k3_rewrite_generated_url.py
+      - name: Compile debug-only Android APK
+        run: >-
+          flutter build apk --debug
+          --dart-define=K3_BUILD_ENV=staging
+          --dart-define-from-file="${{ runner.temp }}/k3_offline_dart_defines.json"
+      - name: Package isolated APK
+        run: |
+          test -s build/app/outputs/flutter-apk/app-debug.apk
+          mkdir -p dist
+          cp build/app/outputs/flutter-apk/app-debug.apk dist/k3-offline-sandbox-debug.apk
+          cat > dist/README.txt <<'TXT'
+          K3 synthetic OFFLINE debug build. It is deliberately disconnected
+          from K3 production and staging API/Firebase services. This APK is
+          for installation and compilation checks only, NOT clinical testing,
+          payments, real user accounts, or App Store/Play Store submission.
+          TXT
+      - uses: actions/upload-artifact@v4
+        with:
+          name: k3-offline-android-debug-apk
+          path: dist/
+          retention-days: 5
+          if-no-files-found: error
