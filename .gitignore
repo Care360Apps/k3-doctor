@@ -1,0 +1,39 @@
+# Flutter and Dart generated output
+.dart_tool/
+.flutter-plugins
+.flutter-plugins-dependencies
+.packages
+.pub-cache/
+.pub/
+build/
+coverage/
+*.g.dart.tmp
+# Apple and CocoaPods local files
+ios/.cocoapods_home/
+ios/Pods/
+ios/Flutter/Generated.xcconfig
+ios/Flutter/flutter_export_environment.sh
+ios/Flutter/App.framework/
+ios/Flutter/Flutter.framework/
+ios/Flutter/ephemeral/
+ios/Runner/GeneratedPluginRegistrant.*.bak
+*.xcuserstate
+**/xcuserdata/
+.DS_Store
+__MACOSX/
+# Android/Google credentials and local config
+android/local.properties
+android/key.properties
+android/app/google-services.json
+**/GoogleService-Info.plist
+*.jks
+*.keystore
+*.p8
+*.p12
+*.mobileprovision
+*.pem
+.env
+.env.*
+# IDE and git
+.idea/
+.gradle/

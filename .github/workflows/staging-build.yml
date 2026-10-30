@@ -1,0 +1,95 @@
+name: K3 opt-in staging builds (never production signed)
+on:
+  workflow_dispatch:
+    inputs:
+      platform:
+        description: 'Target to build'
+        type: choice
+        required: true
+        options: [android, ios]
+permissions:
+  contents: read
+jobs:
+  android:
+    if: ${{ inputs.platform == 'android' && vars.K3_STAGING_API_VERIFIED == 'true' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 55
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate source and notification transport
+        run: |
+          python3 tools/k3_preflight.py
+          python3 tools/k3_notification_preflight.py
+      - name: Validate Gradle Wrapper JAR
+        if: ${{ inputs.platform == 'android' }}
+        uses: gradle/actions/wrapper-validation@v6
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.38.3'
+          channel: stable
+          cache: true
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - name: Install Firebase staging config
+        env:
+          FIREBASE_JSON_B64: ${{ secrets.K3_STAGING_ANDROID_FIREBASE_JSON_B64 }}
+        run: |
+          test -n "$FIREBASE_JSON_B64" || { echo 'Staging Firebase configuration missing'; exit 1; }
+          printf '%s' "$FIREBASE_JSON_B64" | base64 -d > android/app/google-services.json
+      - name: Create staging compile-time configuration
+        env:
+          K3_STAGING_API_URL: ${{ secrets.K3_STAGING_API_URL }}
+        run: python3 tools/k3_staging_config.py --platform android --firebase android/app/google-services.json --out "$RUNNER_TEMP/k3_staging.json"
+      - run: flutter pub get
+      - run: dart run build_runner build --delete-conflicting-outputs
+      - name: Enforce environment-defined API URL in Retrofit code
+        run: python3 tools/k3_rewrite_generated_url.py
+      - name: Android debug build (must use verified staging API config)
+        run: flutter build apk --debug --dart-define=K3_BUILD_ENV=staging --dart-define-from-file="$RUNNER_TEMP/k3_staging.json"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: k3-staging-android-debug-apk
+          path: build/app/outputs/flutter-apk/app-debug.apk
+          retention-days: 3
+  ios:
+    if: ${{ inputs.platform == 'ios' && vars.K3_STAGING_API_VERIFIED == 'true' }}
+    runs-on: macos-latest
+    timeout-minutes: 70
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate source and notification transport
+        run: |
+          python3 tools/k3_preflight.py
+          python3 tools/k3_notification_preflight.py
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.38.3'
+          channel: stable
+          cache: true
+      - name: Install Firebase staging config
+        env:
+          FIREBASE_PLIST_B64: ${{ secrets.K3_STAGING_IOS_FIREBASE_PLIST_B64 }}
+        run: |
+          test -n "$FIREBASE_PLIST_B64" || { echo 'Staging Firebase configuration missing'; exit 1; }
+          printf '%s' "$FIREBASE_PLIST_B64" | base64 -D > ios/Runner/GoogleService-Info.plist
+      - name: Create staging compile-time configuration
+        env:
+          K3_STAGING_API_URL: ${{ secrets.K3_STAGING_API_URL }}
+        run: python3 tools/k3_staging_config.py --platform ios --firebase ios/Runner/GoogleService-Info.plist --out "$RUNNER_TEMP/k3_staging.json"
+      - run: flutter pub get
+      - run: dart run build_runner build --delete-conflicting-outputs
+      - name: Enforce environment-defined API URL in Retrofit code
+        run: python3 tools/k3_rewrite_generated_url.py
+      - name: iOS Simulator build (unsigned)
+        run: flutter build ios --simulator --dart-define=K3_BUILD_ENV=staging --dart-define-from-file="$RUNNER_TEMP/k3_staging.json"
+      - name: Archive unsigned iOS Simulator app
+        run: |
+          test -d build/ios/iphonesimulator/Runner.app
+          ditto -c -k --sequesterRsrc --keepParent build/ios/iphonesimulator/Runner.app "$RUNNER_TEMP/k3-ios-simulator.zip"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: k3-staging-ios-simulator
+          path: ${{ runner.temp }}/k3-ios-simulator.zip
+          retention-days: 3
