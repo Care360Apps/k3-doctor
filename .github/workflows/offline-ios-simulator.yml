@@ -1,0 +1,46 @@
+name: K3 offline iOS Simulator (synthetic services; not clinical)
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  ios-sandbox:
+    runs-on: macos-latest
+    timeout-minutes: 80
+    env:
+      K3_STAGING_API_URL: https://k3-offline.invalid/api/
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verify original source is free of private build files
+        run: |
+          python3 tools/k3_preflight.py
+          python3 tools/k3_notification_preflight.py
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.44.9'
+          channel: stable
+          cache: true
+      - name: Enable native iOS Swift Package Manager
+        run: flutter config --enable-swift-package-manager
+      - name: Create synthetic-only iOS Firebase plist and compile-time API configuration
+        run: |
+          python3 tools/k3_offline_ios_fixture.py
+          python3 tools/k3_staging_config.py --platform ios --firebase ios/Runner/GoogleService-Info.plist --out "$RUNNER_TEMP/k3_offline_ios.json"
+      - name: Install packages
+        run: flutter pub get
+      - name: Generate code
+        run: dart run build_runner build --delete-conflicting-outputs
+      - name: Rewrite generated Retrofit URL to use Dart environment
+        run: python3 tools/k3_rewrite_generated_url.py
+      - name: Compile iOS Simulator-only binary (not signed for distribution)
+        run: flutter build ios --simulator --dart-define=K3_BUILD_ENV=staging --dart-define-from-file="$RUNNER_TEMP/k3_offline_ios.json"
+      - name: Package iOS Simulator artifact
+        run: |
+          test -d build/ios/iphonesimulator/Runner.app
+          ditto -c -k --sequesterRsrc --keepParent build/ios/iphonesimulator/Runner.app "$RUNNER_TEMP/k3-ios-offline-simulator.zip"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: k3-offline-ios-simulator-app
+          path: ${{ runner.temp }}/k3-ios-offline-simulator.zip
+          retention-days: 5
+          if-no-files-found: error
