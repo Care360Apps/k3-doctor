@@ -19,6 +19,7 @@ import 'package:doctro/screens/auth/phoneverification.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import '../onboarding/care360_master_brand.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:fluttertoast/fluttertoast.dart';
 import 'package:onesignal_flutter/onesignal_flutter.dart';
@@ -164,6 +165,19 @@ class _SignInState extends State<SignIn> {
                         height: height * 0.5,
                         width: width * 1,
                         fit: BoxFit.fill,
+                      ),
+                      Positioned(
+                        top: MediaQuery.of(context).padding.top + 12,
+                        left: 16,
+                        child: Container(
+                          width: 140,
+                          padding: const EdgeInsets.symmetric(vertical: 9),
+                          decoration: BoxDecoration(
+                            color: Colors.white.withOpacity(0.95),
+                            borderRadius: BorderRadius.circular(18),
+                          ),
+                          child: const Care360MasterBrand(logoSize: 62),
+                        ),
                       ),
                       Positioned(
                         top: height * 0.36,
