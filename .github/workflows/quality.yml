@@ -33,6 +33,8 @@ jobs:
           flutter-version: '3.38.3'
           channel: stable
           cache: true
+      - name: Enable Swift Package Manager for the Paystack plugin metadata
+        run: flutter config --enable-swift-package-manager
       - name: Install dependencies (source only)
         run: flutter pub get
       - name: Generate Retrofit sources if required
