@@ -16,7 +16,7 @@ void main() {
       find.byWidgetPredicate((widget) =>
           widget is Image &&
           widget.image is AssetImage &&
-          (widget.image as AssetImage).assetName == 'assets/images/appLogo.png'),
+          (widget.image as AssetImage).assetName == 'assets/images/care360_master_logo.webp'),
       findsOneWidget,
     );
     expect(tester.takeException(), isNull);
