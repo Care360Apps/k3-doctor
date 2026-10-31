@@ -43,3 +43,5 @@ jobs:
         run: flutter analyze --no-pub
       - name: Offline tests only
         run: flutter test --no-pub test/k3_offline_smoke_test.dart
+      - name: Care360 Plus master-brand widget regression
+        run: flutter test --no-pub test/care360_brand_test.dart
