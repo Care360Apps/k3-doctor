@@ -9,6 +9,9 @@ on:
         options: [android, ios]
 permissions:
   contents: read
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}-${{ inputs.platform || 'default' }}
+  cancel-in-progress: true
 jobs:
   android:
     if: ${{ inputs.platform == 'android' && vars.K3_STAGING_API_VERIFIED == 'true' }}
@@ -32,6 +35,7 @@ jobs:
         with:
           distribution: temurin
           java-version: '17'
+          cache: gradle
       - name: Install Firebase staging config
         env:
           FIREBASE_JSON_B64: ${{ secrets.K3_STAGING_ANDROID_FIREBASE_JSON_B64 }}
