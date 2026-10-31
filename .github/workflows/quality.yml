@@ -35,8 +35,23 @@ jobs:
           cache: true
       - name: Enable Swift Package Manager for the Paystack plugin metadata
         run: flutter config --enable-swift-package-manager
-      - name: Install dependencies (source only)
-        run: flutter pub get
+      - name: Exclude iOS native project from Linux-only source checks
+        run: |
+          # Flutter 3.38 can incorrectly reject SwiftPM-only Paystack on Linux,
+          # even when SwiftPM is enabled. No iOS build occurs in this workflow.
+          # The iOS project is restored immediately after dependency resolution.
+          test -d ios
+          mv ios "$RUNNER_TEMP/k3-ios-project"
+      - name: Install dependencies (Linux source only)
+        run: |
+          flutter pub get
+      - name: Restore iOS project for complete source inspection
+        if: always()
+        run: |
+          if [ -d "$RUNNER_TEMP/k3-ios-project" ]; then
+            test ! -e ios
+            mv "$RUNNER_TEMP/k3-ios-project" ios
+          fi
       - name: Generate Retrofit sources if required
         run: dart run build_runner build --delete-conflicting-outputs
       - name: Enforce environment-defined API URL in Retrofit code
