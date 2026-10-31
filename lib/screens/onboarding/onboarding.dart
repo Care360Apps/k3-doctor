@@ -4,6 +4,7 @@ import '../../constant/color_constant.dart';
 import '../../constant/prefConstatnt.dart';
 import '../../constant/preferences.dart';
 import '../auth/SignIn.dart';
+import 'care360_master_brand.dart';
 
 class OnboardingScreen extends StatefulWidget {
   const OnboardingScreen({super.key});
@@ -72,8 +73,10 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 20.0, vertical: 8),
               child: Row(
-                mainAxisAlignment: MainAxisAlignment.end,
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                crossAxisAlignment: CrossAxisAlignment.center,
                 children: [
+                  const Care360MasterBrand(logoSize: 60),
                   TextButton(
                     onPressed: () => _finishOnboarding(context),
                     child: const Text(
