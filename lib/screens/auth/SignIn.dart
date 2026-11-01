@@ -368,7 +368,7 @@ class _SignInState extends State<SignIn> {
     Map<String, dynamic> body = {"email": email.text, "password": password.text, "device_token": SharedPreferenceHelper.getString(Preferences.device_token)};
 
     SharedPreferenceHelper.setString(Preferences.user_email, email.text);
-    SharedPreferenceHelper.setString(Preferences.password, password.text);
+    // Never store the clinician password in plain application preferences.
 
     Login response;
 
@@ -427,7 +427,7 @@ class _SignInState extends State<SignIn> {
           } catch (_) {}
         }
         if (!fbSignedIn) {
-          authProvider.handleSignIn();
+          authProvider.handleSignIn(email: email.text, password: password.text);
         }
       } else {
         if (response.data != null && response.data!.verify == 0) {
