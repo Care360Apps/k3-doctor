@@ -1,3 +1,6 @@
+import '../../brand/care360_entry.dart';
+import '../../retrofit/care360_connection_error.dart';
+import '../../retrofit/apis.dart';
 import 'dart:core';
 import 'package:doctro/chat/pages/chat_page.dart';
 import 'package:doctro/chat/providers/auth_provider.dart';
@@ -19,7 +22,6 @@ import 'package:doctro/screens/auth/phoneverification.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
-import '../onboarding/care360_master_brand.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:fluttertoast/fluttertoast.dart';
 import 'package:onesignal_flutter/onesignal_flutter.dart';
@@ -45,6 +47,7 @@ class _SignInState extends State<SignIn> {
 
   // Set Password Visibility //
   bool _isHidden = true;
+  bool _loginInProgress = false;
 
   String? deviceToken;
 
@@ -144,59 +147,12 @@ class _SignInState extends State<SignIn> {
     width = MediaQuery.of(context).size.width;
     height = MediaQuery.of(context).size.height;
 
-    return Scaffold(
-      body: GestureDetector(
-        behavior: HitTestBehavior.opaque,
-        onTap: () {
-          FocusScope.of(context).requestFocus(new FocusNode());
-        },
-        child: SingleChildScrollView(
-          child: Form(
-            key: _formkey,
-            child: Column(
-              children: [
-                Container(
-                  height: height * 1,
-                  width: width * 1,
-                  child: Stack(
-                    children: [
-                      Image.asset(
-                        "assets/images/confident-doctor-half.png",
-                        height: height * 0.5,
-                        width: width * 1,
-                        fit: BoxFit.fill,
-                      ),
-                      Positioned(
-                        top: MediaQuery.of(context).padding.top + 12,
-                        left: 16,
-                        child: Container(
-                          width: 140,
-                          padding: const EdgeInsets.symmetric(vertical: 9),
-                          decoration: BoxDecoration(
-                            color: Colors.white.withOpacity(0.95),
-                            borderRadius: BorderRadius.circular(18),
-                          ),
-                          child: const Care360MasterBrand(logoSize: 62),
-                        ),
-                      ),
-                      Positioned(
-                        top: height * 0.36,
-                        child: Container(
-                          width: width * 1,
-                          height: height * 1,
-                          decoration: BoxDecoration(
-                              color: colorWhite,
-                              borderRadius: BorderRadius.only(
-                                topLeft: Radius.circular(width * 0.1),
-                                topRight: Radius.circular(width * 0.1),
-                              )),
-                          child: SingleChildScrollView(
-                            child: Container(
-                              height: height * 0.6,
-                              width: width * 1.0,
-                              child: Column(
-                                mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                                children: [
+    return Care360AuthShell(
+      professional: true,
+      child: Form(
+        key: _formkey,
+        child: Column(mainAxisSize: MainAxisSize.min, children: <Widget>[
+
                                   Text(
                                     getTranslated(context, AppString.login_heading).toString(),
                                     style: TextStyle(fontSize: 28, fontWeight: FontWeight.bold, color: Color(0XFF333333)),
@@ -363,14 +319,10 @@ class _SignInState extends State<SignIn> {
                                         style: TextStyle(fontSize: width * 0.045),
                                         textAlign: TextAlign.center,
                                       ),
-                                      onPressed: () {
+                                      onPressed: _loginInProgress ? null : () {
                                         if (_formkey.currentState!.validate()) {
-                                          CommonFunction.checkNetwork().then((value) {
-                                            if (value == true) {
-                                              callApiForLogin();
-                                            }
-                                          });
-                                        } else {}
+                                          callApiForLogin();
+                                        }
                                       },
                                     ),
                                   ),
@@ -404,28 +356,19 @@ class _SignInState extends State<SignIn> {
                                       )
                                     ],
                                   )
-                                ],
-                              ),
-                            ),
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
+                                
+        ].map((child) => Padding(padding: const EdgeInsets.symmetric(vertical: 7), child: child)).toList()),
       ),
     );
   }
 
   Future<BaseModel<Login>> callApiForLogin() async {
+    if (_loginInProgress) return BaseModel<Login>();
+    setState(() => _loginInProgress = true);
     Map<String, dynamic> body = {"email": email.text, "password": password.text, "device_token": SharedPreferenceHelper.getString(Preferences.device_token)};
 
     SharedPreferenceHelper.setString(Preferences.user_email, email.text);
-    SharedPreferenceHelper.setString(Preferences.password, password.text);
+    // Never store the clinician password in plain application preferences.
 
     Login response;
 
@@ -484,7 +427,7 @@ class _SignInState extends State<SignIn> {
           } catch (_) {}
         }
         if (!fbSignedIn) {
-          authProvider.handleSignIn();
+          authProvider.handleSignIn(email: email.text, password: password.text);
         }
       } else {
         if (response.data != null && response.data!.verify == 0) {
@@ -501,10 +444,16 @@ class _SignInState extends State<SignIn> {
           );
         }
       }
-    } catch (error, stacktrace) {
-      CommonFunction.hideDialog(context);
-      print("Exception occur: $error stackTrace: $stacktrace");
+    } catch (error) {
+      if (mounted) {
+        CommonFunction.hideDialog(context);
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text(Care360ConnectionError.describe(error, apiBaseUrl: Apis.baseUrl)),
+        ));
+      }
       return BaseModel()..setException(ServerError.withError(error: error));
+    } finally {
+      if (mounted) setState(() => _loginInProgress = false);
     }
     return BaseModel()..data = response;
   }
@@ -617,3 +566,4 @@ class _SignInState extends State<SignIn> {
     }
   }
 }
+

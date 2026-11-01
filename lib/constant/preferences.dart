@@ -20,6 +20,8 @@ class SharedPreferenceHelper {
   // call this method from iniState() function of mainApp().
   static Future<SharedPreferences?> init() async {
     _preferences = await _instance;
+    // Remove passwords retained by legacy app versions before any reauthentication.
+    await _preferences!.remove(Preferences.password);
     for (final key in _secureKeys) {
       String? value;
       try {
@@ -50,6 +52,9 @@ class SharedPreferenceHelper {
   static Future<bool> setInt(String key, int value) async => await _preferences!.setInt(key, value);
 
   static Future<bool> setString(String key, String value) async {
+    if (key == Preferences.password) {
+      throw StateError('Storing a password in SharedPreferences is prohibited.');
+    }
     if (_secureKeys.contains(key)) {
       _secureCache[key] = value;
       try {

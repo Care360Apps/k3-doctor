@@ -31,7 +31,10 @@ class AuthProvider extends ChangeNotifier {
     return prefs.getString(FirestoreConstants.id);
   }
   bool check = false;
-  Future<bool> handleSignIn() async {
+  Future<bool> handleSignIn({String? email, String? password}) async {
+    if (email == null || email.isEmpty || password == null || password.isEmpty) {
+      return false;
+    }
 
     _status = Status.authenticating;
 
@@ -39,8 +42,8 @@ class AuthProvider extends ChangeNotifier {
 
     try {
       User? user = (await _auth.createUserWithEmailAndPassword(
-        email: SharedPreferenceHelper.getString(Preferences.user_email),
-        password: SharedPreferenceHelper.getString(Preferences.password),
+        email: email,
+        password: password,
       ))
           .user;
       if (user != null) {
@@ -82,8 +85,8 @@ class AuthProvider extends ChangeNotifier {
     } on FirebaseAuthException catch (signUpError) {
       if (signUpError.code == 'ERROR_EMAIL_ALREADY_IN_USE' || signUpError.code == "email-already-in-use") {
         User? user = (await _auth.signInWithEmailAndPassword(
-          email: SharedPreferenceHelper.getString(Preferences.user_email),
-          password: SharedPreferenceHelper.getString(Preferences.password),
+          email: email,
+          password: password,
         ))
             .user;
         if (user != null) {
@@ -146,24 +149,8 @@ class AuthProvider extends ChangeNotifier {
         print('ensureFirebaseUser: currentUser=${user?.uid}');
       }
 
-      if (user == null) {
-        final email = SharedPreferenceHelper.getString(Preferences.user_email);
-        final pw = SharedPreferenceHelper.getString(Preferences.password);
-        if (email.isNotEmpty && email != 'N_A' &&
-            pw.isNotEmpty && pw != 'N_A') {
-          try {
-            final cred = await _auth.signInWithEmailAndPassword(
-              email: email,
-              password: pw,
-            );
-            user = cred.user;
-          } on FirebaseAuthException catch (e) {
-            if (kDebugMode) {
-              print('ensureFirebaseUser email/password fallback: ${e.code}');
-            }
-          }
-        }
-      }
+      // Only Firebase's persisted authenticated session is trusted. A user
+      // without a session must sign in again instead of replaying a saved password.
 
       if (user == null) {
         if (kDebugMode) {
