@@ -43,9 +43,9 @@ jobs:
         run: dart run build_runner build --delete-conflicting-outputs
       - name: Rewrite generated Retrofit URL to use Dart environment
         run: python3 tools/k3_rewrite_generated_url.py
-      - name: Resolve the pinned Razorpay native SDK
+      - name: Install locked native iOS dependencies
         working-directory: ios
-        run: pod update razorpay-pod razorpay-core-pod --repo-update
+        run: pod install --deployment
       - name: Save resolved iOS dependency lock
         uses: actions/upload-artifact@v4
         with:
