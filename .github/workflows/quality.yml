@@ -22,6 +22,8 @@ jobs:
         run: python3 tools/test_staging_config.py
       - name: Android Play release gate regression (pure offline)
         run: python3 tools/test_k3_android_release_preflight.py
+      - name: Android staging isolation regression (pure offline)
+        run: python3 tools/test_k3_android_staging_identity.py
       - name: Android credential storage regression (pure offline)
         run: python3 tools/test_android_credential_hygiene.py
       - name: Verify Gradle Wrapper integrity against official Gradle checksums
@@ -64,6 +66,6 @@ jobs:
         # Report existing warning/info debt while failing on analyzer errors.
         run: flutter analyze --no-pub --no-fatal-warnings --no-fatal-infos
       - name: Offline tests only
-        run: flutter test --no-pub test/k3_offline_smoke_test.dart test/k3_startup_gate_test.dart test/k3_entry_brand_test.dart test/k3_connection_error_test.dart
+        run: flutter test --no-pub test/k3_offline_smoke_test.dart test/k3_startup_gate_test.dart test/k3_entry_brand_test.dart test/k3_connection_error_test.dart test/k3_auth_contract_test.dart
       - name: Care360 Plus master-brand widget regression
         run: flutter test --no-pub test/care360_brand_test.dart

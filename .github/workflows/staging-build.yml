@@ -42,6 +42,11 @@ jobs:
         run: |
           test -n "$FIREBASE_JSON_B64" || { echo 'Staging Firebase configuration missing'; exit 1; }
           printf '%s' "$FIREBASE_JSON_B64" | base64 -d > android/app/google-services.json
+      - name: Prepare isolated Android staging identity (never replace Play installation)
+        env:
+          K3_STAGING_API_URL: ${{ secrets.K3_STAGING_API_URL }}
+          K3_APPROVED_STAGING_FIREBASE_PROJECT_ID: ${{ vars.K3_STAGING_FIREBASE_PROJECT_ID }}
+        run: python3 tools/k3_android_staging_identity.py --firebase android/app/google-services.json
       - name: Create staging compile-time configuration
         env:
           K3_STAGING_API_URL: ${{ secrets.K3_STAGING_API_URL }}

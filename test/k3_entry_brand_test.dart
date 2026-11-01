@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 import 'package:flutter_test/flutter_test.dart';
 import '../lib/brand/care360_entry.dart';
 
@@ -25,6 +26,8 @@ void main() {
       await tester.pumpAndSettle();
       expect(tester.takeException(), isNull);
       expect(find.text(professional ? 'Care360 Plus' : 'Care360 Patient'), findsOneWidget);
+      // The inclusive waiting-room asset is displayed on both products.
+      expect(find.byType(SvgPicture), findsOneWidget);
       for (var i = 0; i < 2; i++) {
         await tester.ensureVisible(find.text('Continue'));
         await tester.tap(find.text('Continue'));
