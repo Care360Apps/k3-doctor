@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_svg/flutter_svg.dart';
 import 'package:flutter_test/flutter_test.dart';
 import '../lib/brand/care360_entry.dart';
 
@@ -26,13 +25,24 @@ void main() {
       await tester.pumpAndSettle();
       expect(tester.takeException(), isNull);
       expect(find.text(professional ? 'Care360 Plus' : 'Care360 Patient'), findsOneWidget);
-      // The inclusive waiting-room asset is displayed on both products.
-      expect(find.byType(SvgPicture), findsOneWidget);
+      // All three onboarding steps must use distinct bundled photos.
+      final photos = professional
+          ? ['care360_clinician_team.webp', 'care360_appointments.webp', 'care360_family_care.webp']
+          : ['care360_family_care.webp', 'care360_appointments.webp', 'care360_clinician_team.webp'];
+      void expectPhoto(int index) {
+        expect(find.byWidgetPredicate((widget) =>
+          widget is Image &&
+          widget.image is AssetImage &&
+          (widget.image as AssetImage).assetName.endsWith(photos[index])),
+          findsOneWidget);
+      }
+      expectPhoto(0);
       for (var i = 0; i < 2; i++) {
         await tester.ensureVisible(find.text('Continue'));
         await tester.tap(find.text('Continue'));
         await tester.pumpAndSettle();
         expect(tester.takeException(), isNull);
+        expectPhoto(i + 1);
       }
       await tester.ensureVisible(find.text('Get started'));
       await tester.tap(find.text('Get started'));
@@ -67,6 +77,10 @@ void main() {
     await tester.pumpAndSettle();
     await tester.ensureVisible(find.text('Sign in'));
     await tester.ensureVisible(find.text('CNU Medical Institute'));
+    expect(find.byWidgetPredicate((widget) =>
+      widget is Image && widget.image is AssetImage &&
+      (widget.image as AssetImage).assetName.endsWith('care360_clinician_team.webp')),
+      findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 }
