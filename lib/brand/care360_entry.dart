@@ -1,10 +1,11 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 const _ink = Color(0xFF102B48);
 const _green = Color(0xFF137D66);
 const _paper = Color(0xFFF8FAF6);
-const _hero = 'assets/images/care360_nigeria_welcome.webp';
+const _hero = 'assets/images/care360_inclusive_hospital.svg';
 
 class Care360Brand extends StatelessWidget {
   const Care360Brand({super.key, required this.professional});
@@ -72,9 +73,9 @@ class _CarePhoto extends StatelessWidget {
   @override
   Widget build(BuildContext context) => ClipRRect(
     borderRadius: BorderRadius.circular(26),
-    child: AspectRatio(aspectRatio: 1.6, child: Image.asset(_hero,
+    child: AspectRatio(aspectRatio: 1.6, child: SvgPicture.asset(_hero,
       fit: BoxFit.cover,
-      semanticLabel: 'A Nigerian healthcare professional talking with a mother and daughter')),
+      semanticsLabel: 'An inclusive African hospital waiting area with women, men, a child, and healthcare staff')),
   );
 }
 
