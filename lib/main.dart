@@ -1,3 +1,4 @@
+import 'startup_gate.dart';
 import 'dart:async';
 import'dart:io';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -59,44 +60,49 @@ void main() {
     debugPrint = (String? message, {int? wrapWidth}) {};
   }
   runZoned(
-    _main,
+    () {
+      WidgetsFlutterBinding.ensureInitialized();
+      runApp(StartupGate(
+        initialize: _initializeApp,
+        onReady: () => unawaited(_initFirebaseMessagingWithLogging()),
+      ));
+    },
     zoneSpecification: kReleaseMode ? ZoneSpecification(print: (_, __, ___, ____) {}) : null,
   );
 }
 
-Future<void> _main() async {
+Future<Widget> _initializeApp() async {
   WidgetsFlutterBinding.ensureInitialized();
-  await SharedPreferences.getInstance();
+  final prefs = await SharedPreferences.getInstance();
   await Firebase.initializeApp(
     options: DefaultFirebaseOptions.currentPlatform,
   );
   await SharedPreferenceHelper.init();
 
-  await _initFirebaseMessagingWithLogging();
 
   if (Platform.isAndroid) {
     SharedPreferenceHelper.setString(Preferences.device_platform, "Android");
   }
 
-  runApp(MyApp());
+  return MyApp(prefs: prefs);
 }
 
 Future<void> _initFirebaseMessagingWithLogging() async {
   try {
     if (Platform.isIOS) {
-      final settings = await FirebaseMessaging.instance.requestPermission();
+      final settings = await FirebaseMessaging.instance.requestPermission().timeout(const Duration(seconds: 5));
       debugPrint('FCM permission status in main: ${settings.authorizationStatus}');
 
       // On iOS simulators the APNS token is often null. Guard against this to
       // avoid [firebase_messaging/apns-token-not-set] crashing the app.
-      final apnsToken = await FirebaseMessaging.instance.getAPNSToken();
+      final apnsToken = await FirebaseMessaging.instance.getAPNSToken().timeout(const Duration(seconds: 5));
       if (apnsToken == null) {
         debugPrint('Skipping subscribeToTopic(\"all\"): APNS token is null.');
         return;
       }
     }
 
-    await FirebaseMessaging.instance.subscribeToTopic("all");
+    await FirebaseMessaging.instance.subscribeToTopic("all").timeout(const Duration(seconds: 5));
     debugPrint('Successfully subscribed to FCM topic \"all\".');
   } catch (e, st) {
     debugPrint('Error during FCM topic subscription: $e\n$st');
@@ -116,6 +122,8 @@ const AndroidNotificationChannel channel = AndroidNotificationChannel(
 );
 
 class MyApp extends StatefulWidget {
+  MyApp({required this.prefs});
+  final SharedPreferences prefs;
 
   _MyAppState createState() => _MyAppState();
 
@@ -143,15 +151,20 @@ class _MyAppState extends State<MyApp> {
 
   void initState() {
     super.initState();
-    init();
+    _prefs = widget.prefs;
     settingRequest();
     getToken();
   }
 
-  getToken() async {
-   String token = (await FirebaseMessaging.instance.getToken())!;
-    if (token.isNotEmpty) {
-      SharedPreferenceHelper.setString(Preferences.messageToken, token);
+  Future<void> getToken() async {
+    try {
+      final token = await FirebaseMessaging.instance.getToken()
+          .timeout(const Duration(seconds: 5));
+      if (token != null && token.isNotEmpty) {
+        await SharedPreferenceHelper.setString(Preferences.messageToken, token);
+      }
+    } catch (_) {
+      debugPrint('Optional push token unavailable; app remains usable.');
     }
   }
 
@@ -276,11 +289,6 @@ class _MyAppState extends State<MyApp> {
     }
   }
 
-  Future<SharedPreferences?> init() async {
-    _prefs = await SharedPreferences.getInstance();
-    return _prefs;
-  }
-
   void setLocale(Locale locale) {
     setState(() {
       _locale = locale;
@@ -349,7 +357,7 @@ class _MyAppState extends State<MyApp> {
               ],
               localeResolutionCallback: (deviceLocal, supportedLocales) {
                 for (var local in supportedLocales) {
-                  if (local.languageCode == deviceLocal!.languageCode &&
+                  if (deviceLocal != null && local.languageCode == deviceLocal.languageCode &&
                       local.countryCode == deviceLocal.countryCode) {
                     return deviceLocal;
                   }
