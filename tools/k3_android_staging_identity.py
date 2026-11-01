@@ -10,8 +10,26 @@ import os
 from pathlib import Path
 import re
 from urllib.parse import urlsplit
+import ipaddress
 
 SUFFIX = ".k3staging"
+
+
+def _is_staging_host(host: str) -> bool:
+    # A standalone DNS label or hyphen-delimited environment token, never
+    # substrings such as 'contest', 'development' or 'productionstaging'.
+    if not host or host.endswith((".invalid", ".local", ".test", ".example")):
+        return False
+    try:
+        ipaddress.ip_address(host)
+        return False
+    except ValueError:
+        pass
+    labels = host.lower().split(".")
+    return len(labels) >= 3 and any(
+        token in ("staging", "sandbox", "test", "dev")
+        for label in labels[:-2] for token in label.split("-")
+    )
 
 
 def verify_endpoint(value: str) -> None:
@@ -20,9 +38,7 @@ def verify_endpoint(value: str) -> None:
     # The production server must never be the Android staging target.
     if (u.scheme != "https" or u.path != "/api/" or not host or
             u.port not in (None, 443) or u.username or u.password or
-            u.query or u.fragment or not any(
-                marker in host for marker in ("staging", "sandbox", "test", "dev")
-            ) or host.endswith((".invalid", ".local", ".test", ".example"))):
+            u.query or u.fragment or not _is_staging_host(host)):
         raise ValueError("An approved HTTPS staging API URL ending /api/ is required")
 
 
