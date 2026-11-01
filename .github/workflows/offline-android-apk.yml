@@ -17,6 +17,24 @@ jobs:
     timeout-minutes: 55
     steps:
       - uses: actions/checkout@v4
+      - name: Reclaim unused CI toolchains before Android compilation
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "Available space before cleanup:"
+          df -h /
+          for target in /usr/share/dotnet /opt/ghc /usr/local/share/powershell; do
+            if [[ -d "$target" ]]; then
+              sudo rm -rf -- "$target"
+            fi
+          done
+          echo "Available space after cleanup:"
+          df -h /
+          free_kib="$(df -Pk / | awk 'NR==2 {print $4}')"
+          if (( free_kib < 8 * 1024 * 1024 )); then
+            echo "::error::Less than 8 GiB free; refusing an Android compile that will exhaust runner storage."
+            exit 1
+          fi
       - name: Confirm offline-only source safety
         run: |
           python3 tools/k3_preflight.py
@@ -50,6 +68,16 @@ jobs:
         run: |
           dart run build_runner build --delete-conflicting-outputs
           python3 tools/k3_rewrite_generated_url.py
+      - name: Verify disk budget before native Gradle build
+        shell: bash
+        run: |
+          set -euo pipefail
+          df -h /
+          free_kib="$(df -Pk / | awk 'NR==2 {print $4}')"
+          if (( free_kib < 5 * 1024 * 1024 )); then
+            echo "::error::Less than 5 GiB before Android Gradle/NDK; aborting to prevent disk exhaustion."
+            exit 1
+          fi
       - name: Build Android debug APK only
         run: >-
           flutter build apk --debug
