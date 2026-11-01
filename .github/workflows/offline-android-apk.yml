@@ -1,0 +1,65 @@
+name: Care360 Plus offline Android APK (manual; synthetic only)
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: plus-manual-offline-apk-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  isolated-android:
+    runs-on: ubuntu-latest
+    timeout-minutes: 55
+    steps:
+      - uses: actions/checkout@v4
+      - name: Confirm offline-only source safety
+        run: |
+          python3 tools/k3_preflight.py
+          python3 tools/k3_notification_preflight.py
+          python3 tools/test_android_credential_hygiene.py
+          python3 tools/test_k3_android_release_preflight.py
+      - name: Validate Android Gradle wrapper
+        uses: gradle/actions/wrapper-validation@v6
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+          cache: gradle
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.38.3'
+          channel: stable
+          cache: true
+      - name: Prepare synthetic-only API/Firebase and distinct debug package
+        run: python3 tools/k3_offline_build_fixture.py
+      - name: Exclude iOS project from Android-only dependency resolution
+        run: |
+          test -d ios
+          mv ios "$RUNNER_TEMP/k3-ios-project"
+      - name: Get Flutter dependencies with pinned lockfile
+        run: |
+          flutter pub get
+          flutter pub get --enforce-lockfile
+          git diff --exit-code -- pubspec.lock
+      - name: Generate Retrofit client and enforce configured API URL
+        run: |
+          dart run build_runner build --delete-conflicting-outputs
+          python3 tools/k3_rewrite_generated_url.py
+      - name: Build Android debug APK only
+        run: >-
+          flutter build apk --debug
+          --target-platform=android-arm64
+          --dart-define=K3_BUILD_ENV=staging
+          --dart-define-from-file="${{ runner.temp }}/k3_offline_dart_defines.json"
+      - name: Label isolated debug APK
+        run: |
+          test -s build/app/outputs/flutter-apk/app-debug.apk
+          mkdir -p dist
+          cp build/app/outputs/flutter-apk/app-debug.apk dist/care360-plus-OFFLINE-TEST.apk
+          printf '%s\n'             'SYNTHETIC OFFLINE Care360 Plus debug APK only.'             'Package name has .k3sandbox suffix, not the Play Store package.'             'No real backend, user accounts, patient data or payment testing.'             > dist/README.txt
+      - uses: actions/upload-artifact@v4
+        with:
+          name: care360-plus-isolated-android-debug
+          path: dist/
+          retention-days: 3
+          if-no-files-found: error
