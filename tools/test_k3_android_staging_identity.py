@@ -50,7 +50,12 @@ class TestStagingIdentity(unittest.TestCase):
         for url in ["https://medic.care360hms.com/api/",
                     "https://k3-offline.invalid/api/",
                     "http://staging.care360apps.com/api/",
-                    "https://staging.care360apps.com/public/"]:
+                    "https://staging.care360apps.com/public/",
+                    "https://productionstaging.care360apps.com/api/",
+                    "https://contest.care360apps.com/api/",
+                    "https://development.care360apps.com/api/",
+                    "https://stagingcare360apps.com/api/",
+                    "https://127.0.0.1/api/"]:
             with self.subTest(url=url), self.assertRaises(ValueError):
                 mod.verify_endpoint(url)
 
