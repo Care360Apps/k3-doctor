@@ -1,3 +1,4 @@
+import '../../brand/care360_entry.dart';
 import 'dart:core';
 import 'package:doctro/chat/pages/chat_page.dart';
 import 'package:doctro/chat/providers/auth_provider.dart';
@@ -19,7 +20,6 @@ import 'package:doctro/screens/auth/phoneverification.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
-import '../onboarding/care360_master_brand.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:fluttertoast/fluttertoast.dart';
 import 'package:onesignal_flutter/onesignal_flutter.dart';
@@ -144,59 +144,12 @@ class _SignInState extends State<SignIn> {
     width = MediaQuery.of(context).size.width;
     height = MediaQuery.of(context).size.height;
 
-    return Scaffold(
-      body: GestureDetector(
-        behavior: HitTestBehavior.opaque,
-        onTap: () {
-          FocusScope.of(context).requestFocus(new FocusNode());
-        },
-        child: SingleChildScrollView(
-          child: Form(
-            key: _formkey,
-            child: Column(
-              children: [
-                Container(
-                  height: height * 1,
-                  width: width * 1,
-                  child: Stack(
-                    children: [
-                      Image.asset(
-                        "assets/images/confident-doctor-half.png",
-                        height: height * 0.5,
-                        width: width * 1,
-                        fit: BoxFit.fill,
-                      ),
-                      Positioned(
-                        top: MediaQuery.of(context).padding.top + 12,
-                        left: 16,
-                        child: Container(
-                          width: 140,
-                          padding: const EdgeInsets.symmetric(vertical: 9),
-                          decoration: BoxDecoration(
-                            color: Colors.white.withOpacity(0.95),
-                            borderRadius: BorderRadius.circular(18),
-                          ),
-                          child: const Care360MasterBrand(logoSize: 62),
-                        ),
-                      ),
-                      Positioned(
-                        top: height * 0.36,
-                        child: Container(
-                          width: width * 1,
-                          height: height * 1,
-                          decoration: BoxDecoration(
-                              color: colorWhite,
-                              borderRadius: BorderRadius.only(
-                                topLeft: Radius.circular(width * 0.1),
-                                topRight: Radius.circular(width * 0.1),
-                              )),
-                          child: SingleChildScrollView(
-                            child: Container(
-                              height: height * 0.6,
-                              width: width * 1.0,
-                              child: Column(
-                                mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                                children: [
+    return Care360AuthShell(
+      professional: true,
+      child: Form(
+        key: _formkey,
+        child: Column(mainAxisSize: MainAxisSize.min, children: <Widget>[
+
                                   Text(
                                     getTranslated(context, AppString.login_heading).toString(),
                                     style: TextStyle(fontSize: 28, fontWeight: FontWeight.bold, color: Color(0XFF333333)),
@@ -404,19 +357,8 @@ class _SignInState extends State<SignIn> {
                                       )
                                     ],
                                   )
-                                ],
-                              ),
-                            ),
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
+                                
+        ].map((child) => Padding(padding: const EdgeInsets.symmetric(vertical: 7), child: child)).toList()),
       ),
     );
   }
@@ -617,3 +559,4 @@ class _SignInState extends State<SignIn> {
     }
   }
 }
+
