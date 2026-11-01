@@ -1,11 +1,19 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_svg/flutter_svg.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 const _ink = Color(0xFF102B48);
 const _green = Color(0xFF137D66);
 const _paper = Color(0xFFF8FAF6);
-const _hero = 'assets/images/care360_inclusive_hospital.svg';
+const _carePhotos = [
+  'assets/images/care360_family_care.webp',
+  'assets/images/care360_appointments.webp',
+  'assets/images/care360_clinician_team.webp',
+];
+const _carePhotoDescriptions = [
+  'An African family discussing healthcare with a woman doctor',
+  'An African patient using a mobile phone with a nurse at a clinic',
+  'African women and men receiving guidance from healthcare professionals',
+];
 
 class Care360Brand extends StatelessWidget {
   const Care360Brand({super.key, required this.professional});
@@ -69,13 +77,17 @@ class _LocalIdentity extends StatelessWidget {
 }
 
 class _CarePhoto extends StatelessWidget {
-  const _CarePhoto();
+  const _CarePhoto({required this.photoIndex});
+  final int photoIndex;
+
   @override
   Widget build(BuildContext context) => ClipRRect(
     borderRadius: BorderRadius.circular(26),
-    child: AspectRatio(aspectRatio: 1.6, child: SvgPicture.asset(_hero,
+    child: AspectRatio(aspectRatio: 1.6, child: Image.asset(
+      _carePhotos[photoIndex],
       fit: BoxFit.cover,
-      semanticsLabel: 'An inclusive African hospital waiting area with women, men, a child, and healthcare staff')),
+      semanticLabel: _carePhotoDescriptions[photoIndex],
+    )),
   );
 }
 
@@ -98,7 +110,7 @@ class Care360AuthShell extends StatelessWidget {
             child: Column(children: [
               Care360Brand(professional: professional),
               const SizedBox(height: 18),
-              const _CarePhoto(),
+              _CarePhoto(photoIndex: professional ? 2 : 0),
               const SizedBox(height: 16),
               const _LocalIdentity(),
               const SizedBox(height: 22),
@@ -161,7 +173,7 @@ class _Care360WelcomeState extends State<Care360Welcome> {
                   TextButton(onPressed: _finishing ? null : _finish, child: const Text('Skip')),
                 ]),
                 const SizedBox(height: 22),
-                const _CarePhoto(),
+                _CarePhoto(photoIndex: widget.professional ? [2, 1, 0][_page] : _page),
                 const SizedBox(height: 20),
                 const _LocalIdentity(),
                 const SizedBox(height: 20),
