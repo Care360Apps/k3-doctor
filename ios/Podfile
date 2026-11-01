@@ -30,6 +30,8 @@ flutter_ios_podfile_setup
 target 'Runner' do
   use_frameworks!
   use_modular_headers!
+  # Match the native SDK baseline used by razorpay_flutter 1.4.7.
+  pod 'razorpay-pod', '1.5.8'
   $FirebaseSDKVersion = '11.15.0'
   flutter_install_all_ios_pods File.dirname(File.realpath(__FILE__))
   target 'RunnerTests' do
