@@ -31,8 +31,8 @@ jobs:
           flutter-version: '3.38.3'
           channel: stable
           cache: true
-      - name: Use the project's CocoaPods integration
-        run: flutter config --no-enable-swift-package-manager
+      - name: Enable Swift Package Manager for Paystack
+        run: flutter config --enable-swift-package-manager
       - name: Create synthetic-only iOS Firebase plist and compile-time API configuration
         run: |
           python3 tools/k3_offline_ios_fixture.py
