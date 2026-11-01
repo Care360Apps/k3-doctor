@@ -1,4 +1,6 @@
 import '../../brand/care360_entry.dart';
+import '../../retrofit/care360_connection_error.dart';
+import '../../retrofit/apis.dart';
 import 'dart:core';
 import 'package:doctro/chat/pages/chat_page.dart';
 import 'package:doctro/chat/providers/auth_provider.dart';
@@ -45,6 +47,7 @@ class _SignInState extends State<SignIn> {
 
   // Set Password Visibility //
   bool _isHidden = true;
+  bool _loginInProgress = false;
 
   String? deviceToken;
 
@@ -316,14 +319,10 @@ class _SignInState extends State<SignIn> {
                                         style: TextStyle(fontSize: width * 0.045),
                                         textAlign: TextAlign.center,
                                       ),
-                                      onPressed: () {
+                                      onPressed: _loginInProgress ? null : () {
                                         if (_formkey.currentState!.validate()) {
-                                          CommonFunction.checkNetwork().then((value) {
-                                            if (value == true) {
-                                              callApiForLogin();
-                                            }
-                                          });
-                                        } else {}
+                                          callApiForLogin();
+                                        }
                                       },
                                     ),
                                   ),
@@ -364,6 +363,8 @@ class _SignInState extends State<SignIn> {
   }
 
   Future<BaseModel<Login>> callApiForLogin() async {
+    if (_loginInProgress) return BaseModel<Login>();
+    setState(() => _loginInProgress = true);
     Map<String, dynamic> body = {"email": email.text, "password": password.text, "device_token": SharedPreferenceHelper.getString(Preferences.device_token)};
 
     SharedPreferenceHelper.setString(Preferences.user_email, email.text);
@@ -443,10 +444,16 @@ class _SignInState extends State<SignIn> {
           );
         }
       }
-    } catch (error, stacktrace) {
-      CommonFunction.hideDialog(context);
-      print("Exception occur: $error stackTrace: $stacktrace");
+    } catch (error) {
+      if (mounted) {
+        CommonFunction.hideDialog(context);
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text(Care360ConnectionError.describe(error, apiBaseUrl: Apis.baseUrl)),
+        ));
+      }
       return BaseModel()..setException(ServerError.withError(error: error));
+    } finally {
+      if (mounted) setState(() => _loginInProgress = false);
     }
     return BaseModel()..data = response;
   }
