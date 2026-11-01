@@ -14,7 +14,7 @@ class TestStagingConfig(unittest.TestCase):
         self.android=self.dir/'google-services.json'
         self.android.write_text(json.dumps({
             'project_info':{'project_number':'1234567890','project_id':'k3-stage-test','storage_bucket':'k3-stage-test.appspot.test'},
-            'client':[{'api_key':[{'current_key':'fake-api-key'}], 'client_info':{'mobilesdk_app_id':'1:1234567890:android:fake','android_client_info':{'package_name':'com.cnu.patient.k3staging'}}}]
+            'client':[{'api_key':[{'current_key':'fake-api-key'}], 'client_info':{'mobilesdk_app_id':'1:1234567890:android:fake','android_client_info':{'package_name':'com.cnu.doctor.k3staging'}}}]
         }))
         self.ios=self.dir/'GoogleService-Info.plist'
         self.ios.write_bytes(plistlib.dumps({
@@ -27,7 +27,7 @@ class TestStagingConfig(unittest.TestCase):
         file=self.android if platform=='android' else self.ios
         return subprocess.run([sys.executable,str(TOOL),'--platform',platform,
             '--firebase',str(file),'--out',str(self.out)] +
-            (['--android-package','com.cnu.patient.k3staging'] if platform=='android' else []),env=env,
+            (['--android-package','com.cnu.doctor.k3staging'] if platform=='android' else []),env=env,
             capture_output=True,text=True)
 
     def test_android_accepts_fake_staging_config(self):
@@ -56,7 +56,7 @@ class TestStagingConfig(unittest.TestCase):
 
     def test_android_rejects_missing_staging_app(self):
         obj=json.loads(self.android.read_text())
-        obj['client'][0]['client_info']['android_client_info']['package_name']='com.cnu.patient'
+        obj['client'][0]['client_info']['android_client_info']['package_name']='com.cnu.doctor'
         self.android.write_text(json.dumps(obj))
         result=self.run_tool('android','https://staging.example.test/api/')
         self.assertNotEqual(result.returncode,0)
