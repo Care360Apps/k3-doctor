@@ -14,6 +14,19 @@ void main() {
     expect(message, contains('not connected'));
   });
 
+  test('Real offline APK host is recognized and sign-in is unavailable', () {
+    expect(Care360ConnectionError.isOfflinePreview('https://k3-offline.invalid/api/'), isTrue);
+    expect(Care360ConnectionError.isOfflinePreview('http://127.0.0.1:9/api/'), isTrue);
+    expect(Care360ConnectionError.isOfflinePreview('https://staging.care360.example.com/api/'), isFalse);
+    final message = Care360ConnectionError.describe(
+      DioException(requestOptions: request, type: DioExceptionType.connectionError),
+      apiBaseUrl: 'https://k3-offline.invalid/api/',
+    );
+    expect(message, contains('offline Care360 design test'));
+    expect(message, contains('not connected'));
+    expect(message, isNot(contains('Check your connection')));
+  });
+
   test('Network timeouts have nontechnical retry guidance without leaking URLs', () {
     final message = Care360ConnectionError.describe(
       DioException(requestOptions: request, type: DioExceptionType.connectionTimeout),
