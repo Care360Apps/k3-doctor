@@ -50,7 +50,7 @@ jobs:
       - name: Create staging compile-time configuration
         env:
           K3_STAGING_API_URL: ${{ secrets.K3_STAGING_API_URL }}
-        run: python3 tools/k3_staging_config.py --platform android --firebase android/app/google-services.json --out "$RUNNER_TEMP/k3_staging.json"
+        run: python3 tools/k3_staging_config.py --platform android --firebase android/app/google-services.json --out "$RUNNER_TEMP/k3_staging.json" --android-package com.cnu.doctor.k3staging
       - run: flutter pub get
       - run: dart run build_runner build --delete-conflicting-outputs
       - name: Enforce environment-defined API URL in Retrofit code
