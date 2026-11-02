@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'care360_public_access.dart';
 
 const _ink = Color(0xFF102B48);
 const _green = Color(0xFF137D66);
@@ -113,7 +114,9 @@ class Care360AuthShell extends StatelessWidget {
               _CarePhoto(photoIndex: professional ? 2 : 0),
               const SizedBox(height: 16),
               const _LocalIdentity(),
-              const SizedBox(height: 22),
+              const SizedBox(height: 6),
+              const Care360PublicAccess(),
+              const SizedBox(height: 10),
               Container(width: double.infinity,
                 padding: const EdgeInsets.symmetric(vertical: 22),
                 decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(26)),
