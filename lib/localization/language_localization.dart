@@ -43,7 +43,7 @@ class _LanguageLocalizationDelegate extends LocalizationsDelegate<LanguageLocali
 
   @override
   bool isSupported(Locale locale) {
-    return [ENGLISH, HAUSA, IGBO, YORUBA, FRENCH, SPANISH, ARABIC].contains(locale.languageCode);
+    return [ENGLISH, HAUSA, IGBO, YORUBA, FRENCH, ARABIC].contains(locale.languageCode);
   }
 
   @override
