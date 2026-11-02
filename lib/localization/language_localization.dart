@@ -14,18 +14,26 @@ class LanguageLocalization {
 
   late Map<String, String> _localizationValue;
 
-  Future load() async {
-    String jsonStringValue = await rootBundle.loadString('lib/localization/language/${locale.languageCode.toString()}.json');
-
-    Map<String, dynamic> mappedJson = json.decode(jsonStringValue);
-
-    _localizationValue = mappedJson.map((key, value) => MapEntry(key, value?.toString() ?? ''));
+  Future<void> load() async {
+    // A translated key is opt-in; untranslated clinical and technical strings
+    // remain in English rather than displaying 'null' or guessing meaning.
+    final english = json.decode(await rootBundle.loadString(
+      'lib/localization/language/en.json')) as Map<String, dynamic>;
+    _localizationValue = english.map(
+      (key, value) => MapEntry(key, value?.toString() ?? ''),
+    );
+    if (locale.languageCode != ENGLISH) {
+      final translated = json.decode(await rootBundle.loadString(
+        'lib/localization/language/${locale.languageCode}.json')) as Map<String, dynamic>;
+      for (final item in translated.entries) {
+        if (item.value is String && (item.value as String).trim().isNotEmpty) {
+          _localizationValue[item.key] = item.value as String;
+        }
+      }
+    }
   }
 
-  String? getTranslateValue(String key) {
-    final v = _localizationValue[key];
-    return (v != null && v.isNotEmpty) ? v : null;
-  }
+  String? getTranslateValue(String key) => _localizationValue[key];
 
   static const LocalizationsDelegate<LanguageLocalization> delegate = _LanguageLocalizationDelegate();
 }
@@ -35,7 +43,7 @@ class _LanguageLocalizationDelegate extends LocalizationsDelegate<LanguageLocali
 
   @override
   bool isSupported(Locale locale) {
-    return [ENGLISH, ARABIC].contains(locale.languageCode);
+    return [ENGLISH, HAUSA, IGBO, YORUBA, FRENCH, SPANISH, ARABIC].contains(locale.languageCode);
   }
 
   @override
