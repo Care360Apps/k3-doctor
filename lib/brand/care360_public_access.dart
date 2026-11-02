@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 
-import '../main.dart';
+import 'package:doctro/main.dart';
 import '../localization/localization_constant.dart';
 import 'care360_partner_showcase.dart';
 
