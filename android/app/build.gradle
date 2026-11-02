@@ -20,6 +20,8 @@ android {
     ndkVersion flutter.ndkVersion
 
     compileOptions {
+        // Required by flutter_local_notifications on Android  (AAR metadata).
+        coreLibraryDesugaringEnabled true
         sourceCompatibility JavaVersion.VERSION_17
         targetCompatibility JavaVersion.VERSION_17
     }
@@ -60,6 +62,11 @@ gradle.taskGraph.whenReady { graph ->
     if (!keystorePropertiesFile.exists() && graph.allTasks.any { it.name.toLowerCase().contains("release") }) {
         throw new GradleException("android/key.properties is missing. Release builds must be signed with the upload keystore, never the debug key.")
     }
+}
+
+// Core Java APIs backported to devices below the current Android SDK.
+dependencies {
+    coreLibraryDesugaring 'com.android.tools:desugar_jdk_libs:2.1.4'
 }
 
 flutter {
