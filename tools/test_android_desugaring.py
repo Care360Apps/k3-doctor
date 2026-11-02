@@ -16,11 +16,11 @@ class AndroidDesugaringConfiguration(unittest.TestCase):
         source = GRADLE.read_text(encoding="utf-8")
         self.assertRegex(
             source,
-            r"(?s)compileOptions\\s*\\{[^}]*\\bcoreLibraryDesugaringEnabled\\s+true\\b",
+            r"(?s)compileOptions\s*\{[^}]*\bcoreLibraryDesugaringEnabled\s+true\b",
         )
         self.assertRegex(
             source,
-            r"(?s)dependencies\\s*\\{[^}]*coreLibraryDesugaring\\s+['\\\"]com\\.android\\.tools:desugar_jdk_libs:2\\.1\\.4['\\\"]",
+            r"(?s)dependencies\s*\{[^}]*coreLibraryDesugaring\s+['\\"]com\.android\.tools:desugar_jdk_libs:2\.1\.4['\\"]",
         )
         self.assertIn("sourceCompatibility JavaVersion.VERSION_17", source)
         self.assertIn("targetCompatibility JavaVersion.VERSION_17", source)
