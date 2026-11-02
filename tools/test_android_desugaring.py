@@ -18,9 +18,8 @@ class AndroidDesugaringConfiguration(unittest.TestCase):
             source,
             r"(?s)compileOptions\s*\{[^}]*\bcoreLibraryDesugaringEnabled\s+true\b",
         )
-        self.assertRegex(
-            source,
-            r"(?s)dependencies\s*\{[^}]*coreLibraryDesugaring\s+['\\"]com\.android\.tools:desugar_jdk_libs:2\.1\.4['\\"]",
+        self.assertIn(
+            "coreLibraryDesugaring 'com.android.tools:desugar_jdk_libs:2.1.4'", source,
         )
         self.assertIn("sourceCompatibility JavaVersion.VERSION_17", source)
         self.assertIn("targetCompatibility JavaVersion.VERSION_17", source)
