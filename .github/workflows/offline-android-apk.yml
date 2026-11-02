@@ -41,6 +41,8 @@ jobs:
           python3 tools/k3_notification_preflight.py
           python3 tools/test_android_credential_hygiene.py
           python3 tools/test_k3_android_release_preflight.py
+      - name: Confirm Android notification desugaring before expensive compilation
+        run: python3 tools/test_android_desugaring.py
       - name: Validate Android Gradle wrapper
         uses: gradle/actions/wrapper-validation@v6
       - uses: actions/setup-java@v4
