@@ -8,6 +8,10 @@ String? getTranslated(BuildContext context, String key) {
 }
 
 const String ENGLISH = "en";
+const String HAUSA = "ha";
+const String IGBO = "ig";
+const String YORUBA = "yo";
+const String FRENCH = "fr";
 const String ARABIC = "ar";
 
 Future<Locale> setLocale(String languageCode) async {
@@ -20,6 +24,18 @@ Locale _locale(String languageCode) {
   switch (languageCode) {
     case ENGLISH:
       _temp = Locale(languageCode, 'US');
+      break;
+    case HAUSA:
+      _temp = Locale(languageCode, 'NG');
+      break;
+    case IGBO:
+      _temp = Locale(languageCode, 'NG');
+      break;
+    case YORUBA:
+      _temp = Locale(languageCode, 'NG');
+      break;
+    case FRENCH:
+      _temp = Locale(languageCode, 'FR');
       break;
     case ARABIC:
       _temp = Locale(languageCode, 'AE');
