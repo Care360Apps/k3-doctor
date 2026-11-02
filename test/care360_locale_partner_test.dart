@@ -5,6 +5,7 @@ import '../lib/localization/language_localization.dart';
 
 void main() {
   test('Plus has five-language localization with English fallback', () async {
+    TestWidgetsFlutterBinding.ensureInitialized();
     final en = LanguageLocalization(const Locale('en', 'US'));
     await en.load();
     for (final lang in ['ha', 'ig', 'yo', 'fr']) {
