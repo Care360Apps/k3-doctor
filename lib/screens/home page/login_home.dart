@@ -31,6 +31,7 @@ import 'package:onesignal_flutter/onesignal_flutter.dart';
 import 'package:doctro/chat/constants/firestore_constants.dart';
 import 'package:provider/provider.dart';
 import 'package:flutter/material.dart';
+import '../../brand/care360_partner_showcase.dart';
 
 import '../../model/setting.dart';
 class LoginHomeScreen extends StatefulWidget {
@@ -663,6 +664,7 @@ class _LoginHomeScreenState extends State<LoginHomeScreen> {
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.center,
                                 children: [
+                                  const Care360PartnerShowcase(),
                                   isFilled == 0
                                       ? GestureDetector(
                                           onTap: () => Navigator.pushNamed(context, "profile"),
