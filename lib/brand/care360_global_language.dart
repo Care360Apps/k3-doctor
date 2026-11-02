@@ -7,9 +7,11 @@ class Care360GlobalLanguageSwitch extends StatelessWidget {
   const Care360GlobalLanguageSwitch({
     super.key,
     required this.onSelect,
+    this.rootNavigatorKey,
   });
 
   final Future<void> Function(String) onSelect;
+  final GlobalKey<NavigatorState>? rootNavigatorKey;
 
   static const supportedLanguages = <String, String>{
     'en': 'English',
@@ -26,27 +28,48 @@ class Care360GlobalLanguageSwitch extends StatelessWidget {
       color: const Color(0xFFF8FAF6),
       borderRadius: BorderRadius.circular(28),
       elevation: 2,
-      child: PopupMenuButton<String>(
+      child: IconButton(
         key: const Key('care360-language-every-screen'),
         tooltip: 'Change language',
-        onSelected: (code) async => onSelect(code),
-        itemBuilder: (_) => supportedLanguages.entries.map((entry) =>
-          PopupMenuItem<String>(
-            value: entry.key,
-            child: Row(children: [
-              if (currentCode == entry.key)
-                const Icon(Icons.check, size: 18, color: Color(0xFF137D66))
-              else
-                const SizedBox(width: 18),
-              const SizedBox(width: 8),
-              Text(entry.value),
-            ]),
-          ),
-        ).toList(),
         icon: const Icon(Icons.language, color: Color(0xFF137D66), size: 23),
-        iconSize: 23,
-        padding: EdgeInsets.zero,
         constraints: const BoxConstraints(minWidth: 48, minHeight: 48),
+        onPressed: () async {
+          // MaterialApp.builder sits above the Navigator. Use the navigator's
+          // overlay context so the bottom sheet opens on any app route.
+          final routeContext = rootNavigatorKey?.currentState?.overlay?.context ??
+              context;
+          await showModalBottomSheet<void>(
+            context: routeContext,
+            isScrollControlled: false,
+            builder: (sheetContext) => SafeArea(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Padding(
+                    padding: EdgeInsets.fromLTRB(16, 18, 16, 8),
+                    child: Text('Choose language',
+                        style: TextStyle(fontSize: 18,
+                            fontWeight: FontWeight.bold)),
+                  ),
+                  ...supportedLanguages.entries.map((entry) => ListTile(
+                    key: Key('language-${entry.key}'),
+                    title: Text(entry.value),
+                    leading: Icon(
+                      currentCode == entry.key
+                          ? Icons.radio_button_checked
+                          : Icons.radio_button_unchecked,
+                      color: const Color(0xFF137D66),
+                    ),
+                    onTap: () {
+                      Navigator.of(sheetContext).pop();
+                      onSelect(entry.key);
+                    },
+                  )),
+                ],
+              ),
+            ),
+          );
+        },
       ),
     );
   }
