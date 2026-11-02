@@ -109,7 +109,7 @@ class _ChangeLanguageState extends State<ChangeLanguage> {
   @override
   void initState() {
     super.initState();
-    languageLoader = doctorProfile();
+    languageLoader = Future<void>.value(); // Language changes never require server access.
     name = SharedPreferenceHelper.getString(Preferences.name);
     isFilled = SharedPreferenceHelper.getInt(Preferences.is_filled);
     image = SharedPreferenceHelper.getString(Preferences.image);
@@ -183,17 +183,13 @@ class _ChangeLanguageState extends State<ChangeLanguage> {
                                 groupValue: this.value,
                                 activeColor: colorBlack,
                                 onChanged: (dynamic value) async {
-                                  Future.delayed(Duration(seconds: 1), () async {
-                                    this.value = value;
-                                    Locale local = await setLocale(Language.languageList()[index].languageCode);
-                                    setState(() {
-                                      MyApp.setLocale(context, local);
-                                      SharedPreferenceHelper.setString(Preferences.current_language_code, Language.languageList()[index].languageCode);
-                                      SharedPreferenceHelper.setString(Preferences.language_name, Language.languageList()[index].name);
-                                      updateProfile();
-                                      Navigator.popAndPushNamed(context, "loginHome");
-                                    });
-                                  });
+                                  final language = Language.languageList()[index];
+                                  final locale = await setLocale(language.languageCode);
+                                  if (!mounted) return;
+                                  await SharedPreferenceHelper.setString(
+                                    Preferences.language_name, language.name);
+                                  MyApp.setLocale(context, locale);
+                                  Navigator.pop(context);
                                 },
                                 title: Text(Language.languageList()[index].name),
                               )),
