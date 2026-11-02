@@ -34,6 +34,8 @@ import 'chat/providers/chat_provider.dart';
 import 'chat/providers/home_provider.dart';
 import 'constant/prefConstatnt.dart';
 import 'localization/localization_constant.dart';
+import 'localization/localization_constant.dart' as care360_locale;
+import 'brand/care360_global_language.dart';
 import 'screens/auth/signup.dart';
 import 'screens/auth/phoneverification.dart';
 import 'screens/home page/login_home.dart';
@@ -342,6 +344,28 @@ class _MyAppState extends State<MyApp> {
             ],
             child: MaterialApp(
               navigatorKey: navigatorKey,
+              builder: (context, navigatorChild) => Stack(
+                children: [
+                  if (navigatorChild != null) navigatorChild,
+                  PositionedDirectional(
+                    end: 10,
+                    bottom: 64,
+                    child: SafeArea(
+                      top: false,
+                      left: false,
+                      right: false,
+                      child: Care360GlobalLanguageSwitch(
+                        rootNavigatorKey: navigatorKey,
+                        onSelect: (code) async {
+                          final selectedLocale = await care360_locale.setLocale(code);
+                          if (!mounted) return;
+                          setLocale(selectedLocale);
+                        },
+                      ),
+                    ),
+                  ),
+                ],
+              ),
               title: "Care360 Plus",
               debugShowCheckedModeBanner: false,
               locale: effectiveLocale,
