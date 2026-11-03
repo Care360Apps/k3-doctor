@@ -20,6 +20,8 @@ jobs:
         run: python3 tools/k3_notification_preflight.py
       - name: Offline staging configuration tests
         run: python3 tools/test_staging_config.py
+      - name: LAN debug build isolation regression (pure offline)
+        run: python3 -m unittest discover -s tools -p 'test_k3_lan_build_config.py'
       - name: Android Play release gate regression (pure offline)
         run: python3 tools/test_k3_android_release_preflight.py
       - name: Android staging isolation regression (pure offline)
