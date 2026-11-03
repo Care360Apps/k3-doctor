@@ -1,0 +1,109 @@
+name: Care360 Plus LAN Android debug (manual; no production)
+on:
+  workflow_dispatch:
+    inputs:
+      backend_ipv4:
+        description: 'Private laptop IPv4 hosting Care360 Laravel on port 8000 (e.g. 192.168.100.38)'
+        required: true
+        default: '192.168.100.38'
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: lan-android-debug-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-local-android-debug:
+    runs-on: ubuntu-latest
+    timeout-minutes: 75
+    steps:
+      - name: Checkout application code
+        uses: actions/checkout@v4
+      - name: Source safety and offline configuration tests
+        run: |
+          python3 tools/k3_preflight.py
+          python3 tools/k3_notification_preflight.py
+          python3 -m unittest discover -s tools -p 'test_k3_lan_build_config.py'
+      - name: Verify Gradle wrapper
+        uses: gradle/actions/wrapper-validation@v6
+      - name: Prepare LAN debug identity, Firebase configuration and endpoint
+        env:
+          K3_LAN_IPV4: ${{ inputs.backend_ipv4 }}
+          K3_STAGING_FIREBASE_PROJECT_ID: ${{ vars.K3_STAGING_FIREBASE_PROJECT_ID }}
+          FIREBASE_JSON_B64: ${{ secrets.K3_STAGING_ANDROID_FIREBASE_JSON_B64 }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$FIREBASE_JSON_B64" || { echo "::error::Set K3_STAGING_ANDROID_FIREBASE_JSON_B64 as a repository secret"; exit 1; }
+          test -n "$K3_STAGING_FIREBASE_PROJECT_ID" || { echo "::error::Set K3_STAGING_FIREBASE_PROJECT_ID as a repository variable"; exit 1; }
+          printf '%s' "$FIREBASE_JSON_B64" | base64 --decode > android/app/google-services.json
+          python3 tools/k3_lan_build_config.py \
+            --ipv4 "$K3_LAN_IPV4" \
+            --firebase android/app/google-services.json \
+            --out "$RUNNER_TEMP/k3_lan_dart_defines.json"
+      - name: Free unused runner disk space
+        shell: bash
+        run: |
+          set -euo pipefail
+          for directory in /usr/share/dotnet /opt/ghc /usr/local/share/powershell; do
+            if [ -d "$directory" ]; then sudo rm -rf -- "$directory"; fi
+          done
+          df -h /
+      - name: Set up Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+          cache: gradle
+      - name: Install Flutter SDK
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.38.3'
+          channel: stable
+          cache: true
+      - name: Exclude iOS native project during Linux-only dependency resolution
+        run: |
+          test -d ios
+          mv ios "$RUNNER_TEMP/k3-ios-project"
+      - name: Resolve Flutter packages using committed lockfile
+        run: |
+          flutter pub get
+          flutter pub get --enforce-lockfile
+          git diff --exit-code -- pubspec.lock
+      - name: Generate Retrofit client from source
+        run: |
+          dart run build_runner build --delete-conflicting-outputs
+          python3 tools/k3_rewrite_generated_url.py
+      - name: Build installable Android debug APK
+        run: >-
+          flutter build apk --debug
+          --dart-define=K3_BUILD_ENV=staging
+          --dart-define-from-file="$RUNNER_TEMP/k3_lan_dart_defines.json"
+      - name: Package time-limited LAN test artifact
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -s build/app/outputs/flutter-apk/app-debug.apk
+          mkdir -p dist
+          cp build/app/outputs/flutter-apk/app-debug.apk dist/care360-plus-LAN-debug.apk
+          cat > dist/README.txt <<'TXT'
+          Care360 Plus LAN TEST APK. Android DEBUG ONLY.
+          This app targets the selected private laptop address on HTTP port 8000.
+          It uses the isolated .k3staging Android Firebase registration.
+          Only fictional test accounts on a trusted local network are permitted.
+          Not production-signed; not for patients, clinicians, payments or clinical trials.
+          GitHub cannot reach the user's LAN. Connectivity must be checked from BlueStacks.
+          The package can conflict with an existing .k3staging installation; uninstall
+          the earlier staging app if the signing keys differ. Production app stays separate.
+          TXT
+          (cd dist && sha256sum *.apk > SHA256SUMS.txt)
+      - name: Upload Android debug APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: care360-plus-lan-debug-apk
+          path: dist/
+          retention-days: 3
+          if-no-files-found: error
