@@ -1,5 +1,8 @@
 name: Care360 Plus LAN Android debug (manual; no production)
 on:
+  push:
+    branches:
+      - build/lan-android-20261103
   workflow_dispatch:
     inputs:
       backend_ipv4:
@@ -31,7 +34,7 @@ jobs:
         uses: gradle/actions/wrapper-validation@v6
       - name: Prepare LAN debug identity, Firebase configuration and endpoint
         env:
-          K3_LAN_IPV4: ${{ inputs.backend_ipv4 }}
+          K3_LAN_IPV4: ${{ inputs.backend_ipv4 || '192.168.100.38' }}
           K3_STAGING_FIREBASE_PROJECT_ID: ${{ vars.K3_STAGING_FIREBASE_PROJECT_ID }}
           FIREBASE_JSON_B64: ${{ secrets.K3_STAGING_ANDROID_FIREBASE_JSON_B64 }}
         shell: bash
@@ -44,13 +47,30 @@ jobs:
             --ipv4 "$K3_LAN_IPV4" \
             --firebase android/app/google-services.json \
             --out "$RUNNER_TEMP/k3_lan_dart_defines.json"
-      - name: Free unused runner disk space
+      - name: Free Android build disk space on disposable runner
         shell: bash
         run: |
           set -euo pipefail
-          for directory in /usr/share/dotnet /opt/ghc /usr/local/share/powershell; do
-            if [ -d "$directory" ]; then sudo rm -rf -- "$directory"; fi
+          echo "Disk budget before cleanup:"
+          df -h /
+          # Only delete unrelated preinstalled toolchains and emulator images.
+          # Gradle can download the two NDK versions actually required by plugins.
+          for directory in \
+            /usr/share/dotnet \
+            /opt/ghc \
+            /usr/local/share/powershell \
+            /usr/share/swift \
+            /usr/local/lib/android/sdk/system-images \
+            /usr/local/lib/android/sdk/ndk \
+            /usr/local/lib/android/sdk/cmake; do
+            if [[ -d "$directory" ]]; then
+              echo "Removing unused preinstalled files: $directory"
+              sudo rm -rf -- "$directory"
+            fi
           done
+          # No containers are used by this Flutter/Gradle job.
+          sudo docker system prune --all --force --volumes || true
+          echo "Disk budget after cleanup:"
           df -h /
       - name: Set up Java 17
         uses: actions/setup-java@v4
@@ -77,9 +97,20 @@ jobs:
         run: |
           dart run build_runner build --delete-conflicting-outputs
           python3 tools/k3_rewrite_generated_url.py
+      - name: Check available disk before Android packaging
+        shell: bash
+        run: |
+          set -euo pipefail
+          df -h /
+          available_kib="$(df -Pk / | awk 'NR==2 {print $4}')"
+          if (( available_kib < 8 * 1024 * 1024 )); then
+            echo "::error::Less than 8 GiB free before Gradle; use a larger runner or reclaim disk."
+            exit 1
+          fi
       - name: Build installable Android debug APK
         run: >-
           flutter build apk --debug
+          --target-platform=android-arm64,android-x64
           --dart-define=K3_BUILD_ENV=staging
           --dart-define-from-file="$RUNNER_TEMP/k3_lan_dart_defines.json"
       - name: Package time-limited LAN test artifact
@@ -88,7 +119,7 @@ jobs:
           set -euo pipefail
           test -s build/app/outputs/flutter-apk/app-debug.apk
           mkdir -p dist
-          cp build/app/outputs/flutter-apk/app-debug.apk dist/care360-plus-LAN-debug.apk
+          ln build/app/outputs/flutter-apk/app-debug.apk dist/care360-plus-LAN-debug.apk
           cat > dist/README.txt <<'TXT'
           Care360 Plus LAN TEST APK. Android DEBUG ONLY.
           This app targets the selected private laptop address on HTTP port 8000.
