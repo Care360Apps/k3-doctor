@@ -6,9 +6,9 @@ on:
   workflow_dispatch:
     inputs:
       backend_ipv4:
-        description: 'Private laptop IPv4 hosting Care360 Laravel on port 8000 (e.g. 192.168.100.38)'
+        description: 'Private laptop IPv4 hosting Care360 Laravel on port 8000 (e.g. 192.168.0.101)'
         required: true
-        default: '192.168.100.38'
+        default: '192.168.0.101'
         type: string
 
 permissions:
@@ -34,7 +34,7 @@ jobs:
         uses: gradle/actions/wrapper-validation@v6
       - name: Prepare LAN debug identity, Firebase configuration and endpoint
         env:
-          K3_LAN_IPV4: ${{ inputs.backend_ipv4 || '192.168.100.38' }}
+          K3_LAN_IPV4: ${{ inputs.backend_ipv4 || '192.168.0.101' }}
           K3_STAGING_FIREBASE_PROJECT_ID: ${{ vars.K3_STAGING_FIREBASE_PROJECT_ID }}
           FIREBASE_JSON_B64: ${{ secrets.K3_STAGING_ANDROID_FIREBASE_JSON_B64 }}
         shell: bash
@@ -126,7 +126,7 @@ jobs:
       - name: Build installable Android debug APK
         run: >-
           flutter build apk --debug
-          --target-platform=android-arm64,android-x64
+          --target-platform=android-arm64
           --dart-define=K3_BUILD_ENV=staging
           --dart-define-from-file="$RUNNER_TEMP/k3_lan_dart_defines.json"
       - name: Package time-limited LAN test artifact
@@ -154,3 +154,7 @@ jobs:
           path: dist/
           retention-days: 3
           if-no-files-found: error
+
+# Isolated Plus test build retrigger: NDK Clang correction 2026-11-03.
+
+# New private LAN regression build includes merged clinical note UI and token safety checks.
