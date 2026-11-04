@@ -501,8 +501,7 @@ class _VideoCallState extends State<VideoCall> {
   }
 
   Widget _remoteVideo() {
-    print(
-        'App ID : $appId\t Flag: ${widget.flag}\nChannel Name: ${channelName}\nTocken : ${token}\nRemote UID : ${_remoteUid}');
+    // Do not expose RTC credentials or channel identifiers in UI rebuild logs.
     final engine = _engine;
     if (_remoteUid != null && engine != null) {
       return AgoraVideoView(
