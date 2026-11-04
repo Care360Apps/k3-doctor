@@ -1,8 +1,6 @@
 name: K3 Flutter quality (no production calls)
+# Windows-first routine checks; hosted CI runs only on manually reviewed release candidates.
 on:
-  pull_request:
-  push:
-    branches: [main, develop]
   workflow_dispatch:
 permissions:
   contents: read
