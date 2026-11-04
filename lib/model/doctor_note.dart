@@ -35,6 +35,8 @@ class DoctorNote {
   String? title;
   String? body;
   String? createdAt;
+  String? status;
+  String? finalizedAt;
 
   DoctorNote(
       {this.id,
@@ -43,7 +45,9 @@ class DoctorNote {
       this.appointmentId,
       this.title,
       this.body,
-      this.createdAt});
+      this.createdAt,
+      this.status,
+      this.finalizedAt});
 
   DoctorNote.fromJson(Map<String, dynamic> json) {
     id = json['id'] != null ? int.tryParse(json['id'].toString()) : null;
@@ -53,6 +57,8 @@ class DoctorNote {
     title = json['title'];
     body = json['body'];
     createdAt = json['created_at'];
+    status = json['status']?.toString();
+    finalizedAt = json['finalized_at']?.toString();
   }
 
   Map<String, dynamic> toJson() {
@@ -64,6 +70,8 @@ class DoctorNote {
     data['title'] = title;
     data['body'] = body;
     data['created_at'] = createdAt;
+    data['status'] = status;
+    data['finalized_at'] = finalizedAt;
     return data;
   }
 }

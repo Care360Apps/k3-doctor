@@ -164,7 +164,7 @@ abstract class RestClient {
   Future<AccountDeleteModel> deleteAccountRequest();
 
   @GET(Apis.doctor_notes)
-  Future<DoctorNotesResponse> doctorNotes();
+  Future<DoctorNotesResponse> doctorNotes(@Query('appointment_id') int appointmentId);
 
   @POST(Apis.doctor_notes)
   Future<DoctorNotesResponse> createDoctorNote(@Body() Map<String, dynamic> body);
