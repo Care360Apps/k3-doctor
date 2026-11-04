@@ -30,6 +30,8 @@ jobs:
         run: python3 tools/test_android_credential_hygiene.py
       - name: Notification desugaring configuration regression (pure offline)
         run: python3 tools/test_android_desugaring.py
+      - name: Agora token log exposure regression (offline)
+        run: python3 tools/test_agora_token_logging.py
       - name: Verify Gradle Wrapper integrity against official Gradle checksums
         uses: gradle/actions/wrapper-validation@v6
   flutter-analyze:
