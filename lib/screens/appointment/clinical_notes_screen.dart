@@ -1,0 +1,236 @@
+import 'package:doctro/model/doctor_note.dart';
+import 'package:doctro/retrofit/api_header.dart';
+import 'package:doctro/retrofit/network_api.dart';
+import 'package:flutter/material.dart';
+
+/// Private, appointment-scoped notes for an approved doctor.
+/// Backend permission checks always decide access; this screen is not a gate.
+class ClinicalNotesScreen extends StatefulWidget {
+  const ClinicalNotesScreen({super.key, required this.appointmentId});
+
+  final int appointmentId;
+
+  @override
+  State<ClinicalNotesScreen> createState() => _ClinicalNotesScreenState();
+}
+
+class _ClinicalNotesScreenState extends State<ClinicalNotesScreen> {
+  final _title = TextEditingController();
+  final _body = TextEditingController();
+  List<DoctorNote> _notes = const [];
+  DoctorNote? _editing;
+  bool _loading = true;
+  bool _saving = false;
+  String? _error;
+
+  @override
+  void initState() {
+    super.initState();
+    _refresh();
+  }
+
+  @override
+  void dispose() {
+    _title.dispose();
+    _body.dispose();
+    super.dispose();
+  }
+
+  Future<void> _refresh() async {
+    if (mounted) setState(() { _loading = true; _error = null; });
+    try {
+      final result = await RestClient(RetroApi().dioData())
+          .doctorNotes(widget.appointmentId);
+      if (!mounted) return;
+      setState(() {
+        _notes = result.success == true ? (result.data ?? []) : [];
+        _error = result.success == true ? null : 'Unable to load notes for this appointment.';
+        _loading = false;
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _loading = false;
+        _error = 'Notes are unavailable. Check the connection and your doctor access.';
+      });
+    }
+  }
+
+  void _edit(DoctorNote? note) {
+    setState(() {
+      _editing = note;
+      _title.text = note?.title ?? '';
+      _body.text = note?.body ?? '';
+    });
+  }
+
+  Future<void> _save({required bool finalize}) async {
+    if (_saving) return;
+    final title = _title.text.trim();
+    final body = _body.text.trim();
+    if (title.isEmpty || body.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Enter a title and clinical note before saving.')),
+      );
+      return;
+    }
+    if (finalize) {
+      final confirmed = await showDialog<bool>(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: const Text('Finalize this note?'),
+          content: const Text(
+            'A finalized clinical note is locked against editing. '
+            'Corrections must be recorded as a separate addendum.',
+          ),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(context, false),
+                child: const Text('Keep editing')),
+            FilledButton(onPressed: () => Navigator.pop(context, true),
+                child: const Text('Finalize note')),
+          ],
+        ),
+      );
+      if (confirmed != true || !mounted) return;
+    }
+    setState(() => _saving = true);
+    try {
+      final client = RestClient(RetroApi().dioData());
+      final data = <String, dynamic>{
+        'title': title,
+        'body': body,
+        'status': finalize ? 'final' : 'draft',
+      };
+      final DoctorNotesResponse result;
+      if (_editing?.id != null) {
+        result = await client.updateDoctorNote(_editing!.id!, data);
+      } else {
+        result = await client.createDoctorNote({
+          ...data,
+          'appointment_id': widget.appointmentId,
+        });
+      }
+      if (!mounted) return;
+      if (result.success != true) {
+        throw StateError('Note save was not accepted');
+      }
+      _edit(null);
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text(finalize ? 'Clinical note finalized.' : 'Draft saved.'),
+      ));
+      await _refresh();
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+        content: Text('Could not save the note. No changes were confirmed.'),
+      ));
+    } finally {
+      if (mounted) setState(() => _saving = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final isEditing = _editing != null;
+    return Scaffold(
+      appBar: AppBar(title: const Text('Clinical notes')),
+      body: SafeArea(
+        child: RefreshIndicator(
+          onRefresh: _refresh,
+          child: ListView(
+            padding: const EdgeInsets.all(16),
+            children: [
+              Text('Encounter notes', style: theme.textTheme.titleLarge),
+              const SizedBox(height: 6),
+              Text(
+                'Private notes for this appointment. Only your approved doctor account '
+                'can access them. Finalized notes cannot be silently changed.',
+                style: theme.textTheme.bodyMedium,
+              ),
+              const SizedBox(height: 16),
+              if (_loading) const LinearProgressIndicator(),
+              if (_error != null) ...[
+                Text(_error!, style: TextStyle(color: theme.colorScheme.error)),
+                const SizedBox(height: 8),
+                OutlinedButton.icon(onPressed: _refresh,
+                    icon: const Icon(Icons.refresh), label: const Text('Retry')),
+              ],
+              for (final note in _notes) ...[
+                Card(
+                  child: ListTile(
+                    title: Text(note.title ?? 'Untitled'),
+                    subtitle: Text(
+                      '${note.status == 'final' ? 'Finalized' : 'Draft'}'
+                      ' • ${note.createdAt ?? 'Date unavailable'}',
+                    ),
+                    leading: Icon(note.status == 'final'
+                        ? Icons.verified_user_outlined : Icons.edit_note),
+                    trailing: note.status == 'final'
+                        ? const Icon(Icons.lock_outline)
+                        : const Icon(Icons.chevron_right),
+                    onTap: note.status == 'final' ? null : () => _edit(note),
+                  ),
+                ),
+              ],
+              if (!_loading && _notes.isEmpty && _error == null)
+                const Padding(
+                  padding: EdgeInsets.symmetric(vertical: 12),
+                  child: Text('No clinical notes for this appointment yet.'),
+                ),
+              const SizedBox(height: 20),
+              Row(
+                children: [
+                  Expanded(
+                    child: Text(isEditing ? 'Edit draft' : 'New note',
+                        style: theme.textTheme.titleMedium),
+                  ),
+                  if (isEditing)
+                    TextButton.icon(
+                      onPressed: _saving ? null : () => _edit(null),
+                      icon: const Icon(Icons.add),
+                      label: const Text('New note'),
+                    ),
+                ],
+              ),
+              const SizedBox(height: 10),
+              TextField(
+                controller: _title,
+                maxLength: 160,
+                decoration: const InputDecoration(
+                  labelText: 'Clinical note title',
+                  border: OutlineInputBorder(),
+                ),
+              ),
+              const SizedBox(height: 8),
+              TextField(
+                controller: _body,
+                minLines: 6,
+                maxLines: 14,
+                maxLength: 20000,
+                decoration: const InputDecoration(
+                  labelText: 'Assessment, observations and care plan',
+                  hintText: 'Record your findings, plan and follow-up clearly.',
+                  alignLabelWithHint: true,
+                  border: OutlineInputBorder(),
+                ),
+              ),
+              const SizedBox(height: 12),
+              FilledButton.icon(
+                onPressed: _saving ? null : () => _save(finalize: false),
+                icon: const Icon(Icons.save_outlined),
+                label: Text(_saving ? 'Saving…' : 'Save draft'),
+              ),
+              const SizedBox(height: 8),
+              OutlinedButton.icon(
+                onPressed: _saving ? null : () => _save(finalize: true),
+                icon: const Icon(Icons.lock_outline),
+                label: const Text('Finalize note'),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
