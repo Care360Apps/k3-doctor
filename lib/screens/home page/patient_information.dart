@@ -32,6 +32,7 @@ import '../../chat/models/user_chat.dart';
 import '../../chat/pages/chat_page.dart';
 import '../../chat/providers/auth_provider.dart' as chatAuth;
 import '../videoCall/video_Call.dart';
+import '../appointment/clinical_notes_screen.dart';
 
 class patientDetailsScreen extends StatefulWidget {
   final int? id;
@@ -832,6 +833,23 @@ class _patientDetailsScreenState extends State<patientDetailsScreen> with Ticker
                               physics: AlwaysScrollableScrollPhysics(),
                               child: Column(
                                 children: [
+                                  if (widget.id != null &&
+                                      SharedPreferenceHelper.getString(Preferences.user_role) == 'doctor')
+                                    sectionCard(
+                                      child: ListTile(
+                                        contentPadding: EdgeInsets.zero,
+                                        leading: const Icon(Icons.edit_document, color: Colors.teal),
+                                        title: const Text('Clinical encounter notes'),
+                                        subtitle: const Text('Document findings, save drafts and finalize notes for this appointment.'),
+                                        trailing: const Icon(Icons.chevron_right),
+                                        onTap: () => Navigator.push(
+                                          context,
+                                          MaterialPageRoute(
+                                            builder: (context) => ClinicalNotesScreen(appointmentId: widget.id!),
+                                          ),
+                                        ),
+                                      ),
+                                    ),
                                   sectionCard(
                                     child: Column(
                                       crossAxisAlignment: CrossAxisAlignment.start,
