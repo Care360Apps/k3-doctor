@@ -12,6 +12,7 @@ import 'package:doctro/constant/app_string.dart';
 import 'package:doctro/constant/color_constant.dart';
 import 'package:doctro/constant/prefConstatnt.dart';
 import 'package:doctro/constant/preferences.dart';
+import 'package:doctro/brand/care360_professional_role.dart';
 import 'package:doctro/localization/localization_constant.dart';
 import 'package:doctro/model/EducationCertificate.dart';
 import 'package:doctro/model/EducationModel.dart';
@@ -127,7 +128,10 @@ class _ProfileScreen extends State<ProfileScreen> {
   String? _selectedPopular;
 
   bool _offersVideoCall = true;
-  bool _offersHomeVisit = true;
+  bool _offersHomeVisit = false;
+  bool get _isProvider => Care360ProfessionalRole.isProvider(
+    SharedPreferenceHelper.getString(Preferences.user_role),
+  );
 
   //Set DropDown For Male/Female
   List<String> gender = [];
@@ -1546,6 +1550,7 @@ class _ProfileScreen extends State<ProfileScreen> {
                                                     ],
                                                   ),
                                                 ),
+                                                if (_isProvider)
                                                 Expanded(
                                                   child: Column(
                                                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -1713,10 +1718,10 @@ class _ProfileScreen extends State<ProfileScreen> {
     newDateApiPass = DateUtilForPass().formattedDate(DateTime.parse('$temp'));
     Map<String, dynamic> body = {
       "name": _pName.text,
-      "treatment_id": _valueTreatment!.id,
-      "category_id": _valueCategories!.id,
-      "expertise_id": _valueExpertise!.id,
-      "hospital_id": hospitalIds,
+      "treatment_id": _valueTreatment?.id,
+      "category_id": _valueCategories?.id,
+      "expertise_id": _valueExpertise?.id,
+      "hospital_id": _isProvider ? null : hospitalIds,
       "dob": newDateApiPass,
       "gender": _genderSelect,
       "education": eEducationList,
@@ -1731,7 +1736,7 @@ class _ProfileScreen extends State<ProfileScreen> {
       "based_on": _pBasedOn.text,
       "is_popular": _selectedPopular == getTranslated(context, AppString.popular_yes).toString() ? 1 : 0,
       "offers_video_call": _offersVideoCall ? 1 : 0,
-      "offers_home_visit": _offersHomeVisit ? 1 : 0,
+      "offers_home_visit": _isProvider && _offersHomeVisit ? 1 : 0,
       "address": _pAddress.text.trim().isEmpty ? null : _pAddress.text.trim(),
       "lat": _pLat.text.trim().isEmpty ? null : double.tryParse(_pLat.text),
       "lng": _pLng.text.trim().isEmpty ? null : double.tryParse(_pLng.text)
@@ -1842,8 +1847,8 @@ class _ProfileScreen extends State<ProfileScreen> {
       _pBasedOn.text = response.data!.basedOn!;
 
       _selectedPopular = response.data!.isPopular.toString();
-      _offersVideoCall = (response.data!.offersVideoCall ?? 1) != 0;
-      _offersHomeVisit = (response.data!.offersHomeVisit ?? 1) != 0;
+      _offersVideoCall = (response.data!.offersVideoCall ?? (_isProvider ? 0 : 1)) != 0;
+      _offersHomeVisit = _isProvider && (response.data!.offersHomeVisit ?? 1) != 0;
 
       if (response.data!.hospitalId != null) {
         List<String> list = response.data!.hospitalId!.split(",");
