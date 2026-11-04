@@ -5,6 +5,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:doctro/chat/providers/home_provider.dart';
 import 'package:doctro/constant/prefConstatnt.dart';
 import 'package:doctro/constant/preferences.dart';
+import 'package:doctro/brand/care360_professional_role.dart';
 import 'package:doctro/model/AllMedicines.dart';
 import 'package:doctro/model/DoctorStatusChange.dart';
 import 'package:doctro/model/appointment_details.dart';
@@ -50,6 +51,9 @@ List<Map<String, dynamic>> listOfMedicine = [];
 List<String> medicineReq = [];
 
 class _patientDetailsScreenState extends State<patientDetailsScreen> with TickerProviderStateMixin {
+  bool get _canPrescribe => Care360ProfessionalRole.canCreatePrescription(
+    SharedPreferenceHelper.getString(Preferences.user_role),
+  );
   //Set Loader
   Future? appointmentDetail;
 
@@ -265,7 +269,8 @@ class _patientDetailsScreenState extends State<patientDetailsScreen> with Ticker
         text: getTranslated(context, AppString.patient_illness).toString(),
       ),
       Tab(
-        text: getTranslated(context, AppString.doctor_prescription).toString(),
+        text: _canPrescribe ? getTranslated(context, AppString.doctor_prescription).toString()
+          : 'Prescriptions (doctor only)',
       ),
     ];
 
@@ -937,7 +942,16 @@ class _patientDetailsScreenState extends State<patientDetailsScreen> with Ticker
                                                   title: getTranslated(context, AppString.doctor_prescription).toString(),
                                                 ),
                                                 SizedBox(height: 12),
-                                                ElevatedButton.icon(
+                                                if (!_canPrescribe)
+                                                  const Padding(
+                                                    padding: EdgeInsets.symmetric(vertical: 12),
+                                                    child: Text(
+                                                      'Prescription creation is restricted to approved doctors. Providers can continue scheduling, visiting and communicating with patients.',
+                                                      style: TextStyle(fontSize: 14),
+                                                    ),
+                                                  ),
+                                                if (_canPrescribe)
+                                                  ElevatedButton.icon(
                                                   onPressed: () {
                                                     _days.clear();
                                                     alertValueFirst = false;
