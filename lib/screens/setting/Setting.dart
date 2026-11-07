@@ -14,6 +14,7 @@ import '../../retrofit/base_model.dart';
 import '../../retrofit/network_api.dart';
 import '../../retrofit/server_error.dart';
 import 'ChangePassword.dart';
+import 'professional_availability.dart';
 import '../auth/SignIn.dart';
 import '../subscription/SubscriptionHistory.dart';
 
@@ -159,6 +160,16 @@ class _SettingScreenState extends State<SettingScreen> {
                       inactiveThumbColor: colorWhite,
                       inactiveTrackColor: colorWithOpacity(passwordVisibility, 0.35),
                     ),
+                  ),
+                  SizedBox(height: 12),
+                  buildSettingTile(
+                    title: 'Nearby Care availability',
+                    icon: Icons.location_on_outlined,
+                    onTap: () {
+                      Navigator.of(context).push(MaterialPageRoute(
+                        builder: (_) => const ProfessionalAvailabilityScreen(),
+                      ));
+                    },
                   ),
                   SizedBox(height: 12),
                   buildSettingTile(
