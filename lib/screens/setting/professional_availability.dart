@@ -3,6 +3,7 @@ import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 
 import '../../retrofit/api_header.dart';
+import '../../retrofit/network_api.dart';
 import '../../retrofit/apis.dart';
 import '../../brand/care360_professional_role.dart';
 import '../../constant/prefConstatnt.dart';
@@ -118,6 +119,39 @@ class _ProfessionalAvailabilityScreenState
     }
   }
 
+  Future<void> _useSavedPracticeLocation() async {
+    // Explicit action only: the signup address might be a private home.
+    // No background GPS, permission prompt, or automatic publication.
+    if (!_backendReady || _saving || _loading) return;
+    try {
+      final profile = await RestClient(RetroApi().dioData()).doctorProfile();
+      final lat = double.tryParse(profile.data?.lat?.toString() ?? '');
+      final lng = double.tryParse(profile.data?.lng?.toString() ?? '');
+      if (lat == null || lng == null || lat < -90 || lat > 90 ||
+          lng < -180 || lng > 180 || (lat == 0 && lng == 0)) {
+        throw const FormatException('Saved practice location unavailable.');
+      }
+      if (!mounted) return;
+      setState(() {
+        _lat.text = lat.toStringAsFixed(2);
+        _lng.text = lng.toStringAsFixed(2);
+        _locationConsent = false;
+      });
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+        content: Text('Saved coordinates loaded for review only. '
+            'Confirm that they represent a public service area before '
+            'choosing Start accepting requests.'),
+      ));
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content: Text('No usable saved practice location. '
+              'Enter a public clinic or service-area point manually.'),
+        ));
+      }
+    }
+  }
+
   Future<void> _save({required bool accepting}) async {
     if (!_backendReady || _saving) return;
     final lat = double.tryParse(_lat.text.trim());
@@ -155,6 +189,10 @@ class _ProfessionalAvailabilityScreenState
         _accepting = details['accepting_requests'] == true;
         _availableUntil = details['on_duty_until']?.toString();
         _locationConsent = false;
+        if (!_accepting) {
+          _lat.clear();
+          _lng.clear();
+        }
       });
       _scheduleExpiry();
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
@@ -259,7 +297,22 @@ class _ProfessionalAvailabilityScreenState
                 helperText: 'Verify this is safe for patients to see',
                 border: OutlineInputBorder()),
             ),
-            const SizedBox(height: 18),
+            const SizedBox(height: 8),
+            OutlinedButton.icon(
+              key: const Key('load-saved-practice-location'),
+              onPressed: _backendReady && !_saving
+                  ? _useSavedPracticeLocation : null,
+              icon: const Icon(Icons.place_outlined),
+              label: const Text('Use saved practice location (review first)'),
+            ),
+            const Padding(
+              padding: EdgeInsets.only(top: 5, bottom: 10),
+              child: Text('Only publish a clinic, workplace or service area '
+                'that you intend patients to find. Never publish a private '
+                'residence without explicitly choosing to do so.',
+                style: TextStyle(fontSize: 12, height: 1.4)),
+            ),
+            const SizedBox(height: 8),
             if (_isProvider) ...[
               Text('Home-visit service radius: $_radiusKm km',
                 style: const TextStyle(fontWeight: FontWeight.w700)),
