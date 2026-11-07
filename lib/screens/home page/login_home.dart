@@ -21,6 +21,7 @@ import 'package:doctro/screens/home%20page/patient_information.dart';
 import 'package:doctro/screens/videoCall/PhoneScreen.dart';
 import 'package:doctro/screens/auth/SignIn.dart';
 import '../setting/professional_availability.dart';
+import '../../brand/care360_professional_quick_actions.dart';
 import 'package:doctro/screens/subscription/Subscription.dart';
 import 'package:doctro/screens/videoCall/video_Call.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -674,6 +675,12 @@ class _LoginHomeScreenState extends State<LoginHomeScreen> {
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.center,
                                 children: [
+                                  Care360ProfessionalQuickActions(
+                                    onAppointments: () => Navigator.pushNamed(context, 'AppointmentHistoryScreen'),
+                                    onAvailability: () => Navigator.pushNamed(context, 'Schedule Timings'),
+                                    onNotes: () => Navigator.pushNamed(context, 'Notes'),
+                                    onMessages: () => Navigator.pushNamed(context, 'ChatHome'),
+                                  ),
                                   isFilled == 0
                                       ? GestureDetector(
                                           onTap: () => Navigator.pushNamed(context, "profile"),
