@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 
@@ -36,6 +37,20 @@ class _ProfessionalAvailabilityScreenState
   bool get _isProvider => Care360ProfessionalRole.isProvider(
       SharedPreferenceHelper.getString(Preferences.user_role));
   String? _availableUntil;
+  Timer? _expiryTimer;
+
+  void _scheduleExpiry() {
+    _expiryTimer?.cancel();
+    if (!mounted || !_accepting) return;
+    final expiration = DateTime.tryParse(_availableUntil ?? '');
+    if (expiration == null || !expiration.isAfter(DateTime.now())) {
+      setState(() => _accepting = false);
+      return;
+    }
+    _expiryTimer = Timer(expiration.difference(DateTime.now()), () {
+      if (mounted) setState(() => _accepting = false);
+    });
+  }
 
   @override
   void initState() {
@@ -45,6 +60,7 @@ class _ProfessionalAvailabilityScreenState
 
   @override
   void dispose() {
+    _expiryTimer?.cancel();
     _lat.dispose();
     _lng.dispose();
     super.dispose();
@@ -91,6 +107,7 @@ class _ProfessionalAvailabilityScreenState
         _lat.text = details['public_lat']?.toString() ?? '';
         _lng.text = details['public_lng']?.toString() ?? '';
       });
+      _scheduleExpiry();
       if (_lat.text.isEmpty || _lng.text.isEmpty) {
         // Existing profile coordinates are a convenience ONLY. They are
         // NEVER shared publicly until the professional explicitly consents.
@@ -151,6 +168,7 @@ class _ProfessionalAvailabilityScreenState
         _availableUntil = details['on_duty_until']?.toString();
         _locationConsent = false;
       });
+      _scheduleExpiry();
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
         content: Text(_accepting
           ? 'Accepting nearby requests until the shift expires. '
