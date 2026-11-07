@@ -75,7 +75,7 @@ class _ProfessionalAvailabilityScreenState
         _backendReady = true;
         _accepting = details['accepting_requests'] == true;
         _radiusKm = ((details['service_radius_km'] as num?)?.toInt() ?? 10)
-            .clamp(1, 50);
+            .clamp(1, 50).toInt();
         _availableUntil = details['on_duty_until']?.toString();
         _lat.text = details['public_lat']?.toString() ?? '';
         _lng.text = details['public_lng']?.toString() ?? '';
