@@ -15,6 +15,10 @@ void main() {
     expect(ui, contains('!_locationConsent'));
     expect(ui, contains("'confirm_public_location': 1"));
     expect(ui, contains("'minutes_on_duty': _durationMinutes"));
+    expect(ui, contains('Timer? _expiryTimer'));
+    expect(ui, contains('_scheduleExpiry();'));
+    expect(ui, contains("expiration.difference(DateTime.now())"));
+    expect(ui, contains('_expiryTimer?.cancel();'));
     expect(ui, contains("'service_radius_km': _radiusKm"));
     expect(ui, contains("'accepting_requests': accepting ? 1 : 0"));
     expect(ui, contains("if (!_backendReady || _saving) return"));
