@@ -36,6 +36,7 @@ import 'constant/prefConstatnt.dart';
 import 'localization/localization_constant.dart';
 import 'localization/localization_constant.dart' as care360_locale;
 import 'brand/care360_global_language.dart';
+import 'brand/care360_first_language.dart';
 import 'localization/care360_framework_locale_fallback.dart';
 import 'screens/auth/signup.dart';
 import 'screens/auth/phoneverification.dart';
@@ -396,7 +397,9 @@ class _MyAppState extends State<MyApp> {
               },
               initialRoute: SharedPreferenceHelper.getBoolean(Preferences.is_logged_in) == true
                   ? 'loginHome'
-                  : (SharedPreferenceHelper.getBoolean(Preferences.onboarding_seen) ? 'SignIn' : 'Onboarding'),
+                  : (SharedPreferenceHelper.getBoolean(Preferences.onboarding_seen)
+                      ? 'SignIn'
+                      : 'FirstLanguage'),
               theme: ThemeData(
                 useMaterial3: false,
                 scaffoldBackgroundColor: const Color(0xFFF5F8F7),
@@ -418,6 +421,19 @@ class _MyAppState extends State<MyApp> {
                 ),
               ),
               routes: {
+                'FirstLanguage': (routeContext) => Care360FirstLanguageScreen(
+                  initialLanguage: effectiveLocale.languageCode,
+                  onContinue: (code) async {
+                    // Preserve existing Doctor/Provider session logic.
+                    // Only first-time users are routed through this screen.
+                    final selected = await care360_locale.setLocale(code);
+                    if (!routeContext.mounted) return;
+                    final navigator = Navigator.of(routeContext);
+                    setLocale(selected);
+                    if (!routeContext.mounted) return;
+                    navigator.pushReplacementNamed('Onboarding');
+                  },
+                ),
                 'SignIn': (context) => SignIn(),
                 'signup': (context) => CreateAccount(),
                 'ForgotPasswordScreen': (context) => ForgotPasswordScreen(),
