@@ -20,6 +20,7 @@ import 'package:doctro/retrofit/server_error.dart';
 import 'package:doctro/screens/home%20page/patient_information.dart';
 import 'package:doctro/screens/videoCall/PhoneScreen.dart';
 import 'package:doctro/screens/auth/SignIn.dart';
+import '../setting/professional_availability.dart';
 import 'package:doctro/screens/subscription/Subscription.dart';
 import 'package:doctro/screens/videoCall/video_Call.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -437,6 +438,16 @@ class _LoginHomeScreenState extends State<LoginHomeScreen> {
       onWillPop: onWillPop,
       child: Scaffold(
         key: _scaffoldKey,
+        floatingActionButton: FloatingActionButton.extended(
+          key: const Key('professional-availability-shortcut'),
+          backgroundColor: const Color(0xFF08785E),
+          foregroundColor: Colors.white,
+          icon: const Icon(Icons.location_on_outlined),
+          label: const Text('Nearby Care'),
+          onPressed: () => Navigator.of(context).push(MaterialPageRoute<void>(
+            builder: (_) => const ProfessionalAvailabilityScreen(),
+          )),
+        ),
         drawer: Drawer(
           child: Container(
             color: back,
