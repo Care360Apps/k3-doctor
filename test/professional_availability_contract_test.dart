@@ -6,6 +6,10 @@ void main() {
     final ui = File('lib/screens/setting/professional_availability.dart')
         .readAsStringSync();
     final settings = File('lib/screens/setting/Setting.dart').readAsStringSync();
+    final home = File('lib/screens/home page/login_home.dart')
+        .readAsStringSync();
+    expect(home, contains("Key('professional-availability-shortcut')"));
+    expect(home, contains('ProfessionalAvailabilityScreen()'));
     expect(settings, contains('ProfessionalAvailabilityScreen()'));
     expect(ui, contains("Key('public-service-point-consent')"));
     expect(ui, contains('!_locationConsent'));
