@@ -53,8 +53,13 @@ class _ProfessionalAvailabilityScreenState
     return dio;
   }
 
-  String get _endpoint => Uri.parse(Apis.baseUrl)
-      .resolve('professional/presence').toString();
+  String get _endpoint {
+    final base = Uri.tryParse(Apis.baseUrl);
+    if (base == null || base.scheme != 'https' || base.host.isEmpty) {
+      throw const FormatException('Nearby Care requires a verified HTTPS API.');
+    }
+    return base.resolve('professional/presence').toString();
+  }
 
   Map<String, dynamic>? _asMap(dynamic input) {
     if (input is Map<String, dynamic>) return input;
