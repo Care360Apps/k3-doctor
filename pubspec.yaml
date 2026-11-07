@@ -107,16 +107,16 @@ flutter_icons:
 
 flutter_native_splash:
   color: "#FFFFFF"
-  image: assets/images/appLogo.png
-  color_dark: "#1a1a1a"
-  image_dark: assets/images/appLogo.png
+  image: assets/images/care360_splash_brand.png
+  color_dark: "#123E4D"
+  image_dark: assets/images/care360_splash_brand.png
   android: true
   ios: true
   android_gravity: center
   ios_content_mode: center
 
   android_12:
-    image: assets/images/appLogo.png
+    image: assets/images/care360_splash_brand.png
     color: "#FFFFFF"
     icon_background_color: "#FFFFFF"
 
