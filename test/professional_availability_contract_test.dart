@@ -13,6 +13,9 @@ void main() {
     expect(settings, contains('ProfessionalAvailabilityScreen()'));
     expect(ui, contains("Key('public-service-point-consent')"));
     expect(ui, contains('!_locationConsent'));
+    expect(ui, isNot(contains('doctorProfile()')));
+    expect(ui, isNot(contains('profile.data?.lat')));
+    expect(ui, isNot(contains('profile.data?.lng')));
     expect(ui, contains("'confirm_public_location': 1"));
     expect(ui, contains("'minutes_on_duty': _durationMinutes"));
     expect(ui, contains('Timer? _expiryTimer'));
