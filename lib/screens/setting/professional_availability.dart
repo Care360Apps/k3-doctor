@@ -77,7 +77,8 @@ class _ProfessionalAvailabilityScreenState
 
   String get _endpoint {
     final base = Uri.tryParse(Apis.baseUrl);
-    if (base == null || base.scheme != 'https' || base.host.isEmpty) {
+    if (base == null || base.scheme != 'https' || base.host.isEmpty ||
+        !base.path.endsWith('/api/')) {
       throw const FormatException('Nearby Care requires a verified HTTPS API.');
     }
     return base.resolve('professional/presence').toString();
