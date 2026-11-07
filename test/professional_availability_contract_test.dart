@@ -19,6 +19,7 @@ void main() {
     expect(ui, contains("'accepting_requests': accepting ? 1 : 0"));
     expect(ui, contains("if (!_backendReady || _saving) return"));
     expect(ui, contains("Key('go-offline-nearby-care')"));
+    expect(ui, contains("base.scheme != 'https'"));
     expect(ui, contains("Key('go-online-nearby-care')"));
     expect(ui, contains('This never enables continuous live GPS tracking.'));
     expect(ui, isNot(contains('Permission.location.request()')));
