@@ -13,9 +13,20 @@ void main() {
     expect(settings, contains('ProfessionalAvailabilityScreen()'));
     expect(ui, contains("Key('public-service-point-consent')"));
     expect(ui, contains('!_locationConsent'));
-    expect(ui, isNot(contains('doctorProfile()')));
-    expect(ui, isNot(contains('profile.data?.lat')));
-    expect(ui, isNot(contains('profile.data?.lng')));
+    expect(ui, contains("Key('load-saved-practice-location')"));
+    expect(ui, contains('Future<void> _useSavedPracticeLocation() async'));
+    expect(ui, contains('profile.data?.lat'));
+    expect(ui, contains('profile.data?.lng'));
+    expect(ui, contains('_locationConsent = false;'));
+    expect(ui, contains('if (!_accepting) {'));
+    expect(ui, contains('_lat.clear();'));
+    expect(ui, contains('_lng.clear();'));
+    // Profile values are loaded only by an explicit onPressed callback;
+    // they're not silently copied during initial screen initialization.
+    final loadMethod = ui.substring(
+      ui.indexOf('Future<void> _load() async'),
+      ui.indexOf('Future<void> _useSavedPracticeLocation() async'));
+    expect(loadMethod, isNot(contains('doctorProfile()')));
     expect(ui, contains("'confirm_public_location': 1"));
     expect(ui, contains("'minutes_on_duty': _durationMinutes"));
     expect(ui, contains('Timer? _expiryTimer'));
