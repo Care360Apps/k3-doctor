@@ -4,6 +4,9 @@ import 'package:flutter/material.dart';
 import '../../retrofit/api_header.dart';
 import '../../retrofit/apis.dart';
 import '../../retrofit/network_api.dart';
+import '../../brand/care360_professional_role.dart';
+import '../../constant/prefConstatnt.dart';
+import '../../constant/preferences.dart';
 
 /// Explicit, temporary service-area publication. No passive location tracking.
 /// Requires backend migration + NearbyCareController before enabling real shifts.
@@ -29,6 +32,9 @@ class _ProfessionalAvailabilityScreenState
   bool _locationConsent = false;
   int _radiusKm = 10;
   int _durationMinutes = 60;
+
+  bool get _isProvider => Care360ProfessionalRole.isProvider(
+      SharedPreferenceHelper.getString(Preferences.user_role));
   String? _availableUntil;
 
   @override
@@ -248,14 +254,16 @@ class _ProfessionalAvailabilityScreenState
                 border: OutlineInputBorder()),
             ),
             const SizedBox(height: 18),
-            Text('Home-visit service radius: $_radiusKm km',
-              style: const TextStyle(fontWeight: FontWeight.w700)),
-            Slider(
-              min: 1, max: 50, divisions: 49, value: _radiusKm.toDouble(),
-              onChanged: _backendReady && !_saving
-                ? (value) => setState(() => _radiusKm = value.round())
-                : null),
-            const SizedBox(height: 4),
+            if (_isProvider) ...[
+              Text('Home-visit service radius: $_radiusKm km',
+                style: const TextStyle(fontWeight: FontWeight.w700)),
+              Slider(
+                min: 1, max: 50, divisions: 49, value: _radiusKm.toDouble(),
+                onChanged: _backendReady && !_saving
+                  ? (value) => setState(() => _radiusKm = value.round())
+                  : null),
+              const SizedBox(height: 4),
+            ],
             DropdownButtonFormField<int>(
               value: _durationMinutes,
               decoration: const InputDecoration(
