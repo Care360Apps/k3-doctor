@@ -4,7 +4,6 @@ import 'package:flutter/material.dart';
 
 import '../../retrofit/api_header.dart';
 import '../../retrofit/apis.dart';
-import '../../retrofit/network_api.dart';
 import '../../brand/care360_professional_role.dart';
 import '../../constant/prefConstatnt.dart';
 import '../../constant/preferences.dart';
@@ -109,21 +108,9 @@ class _ProfessionalAvailabilityScreenState
         _lng.text = details['public_lng']?.toString() ?? '';
       });
       _scheduleExpiry();
-      if (_lat.text.isEmpty || _lng.text.isEmpty) {
-        // Existing profile coordinates are a convenience ONLY. They are
-        // NEVER shared publicly until the professional explicitly consents.
-        try {
-          final profile = await RestClient(RetroApi().dioData()).doctorProfile();
-          if (mounted) {
-            setState(() {
-              _lat.text = profile.data?.lat?.toString() ?? '';
-              _lng.text = profile.data?.lng?.toString() ?? '';
-            });
-          }
-        } catch (_) {
-          // A professional may still type a public service-area coordinate.
-        }
-      }
+      // Deliberately do not prefill the professional's registration
+      // address: it may be a private residence rather than a publishable
+      // workplace. Enter and opt in to a public service-area point explicitly.
     } catch (_) {
       // Keep controls disabled until an authenticated backend answers.
     } finally {
