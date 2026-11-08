@@ -65,6 +65,16 @@ void main() {
     expect(notes, contains('_hasDoctorAccess'));
     expect(call, contains('Care360AgoraJoinPolicy.canJoin('));
     expect(call, contains('await engine.joinChannel('));
+    expect(call, contains('await engine.muteLocalVideoStream(nextMuted)'));
+    expect(call, contains('Switch to audio-only'));
+    final signIn = File('lib/screens/auth/SignIn.dart').readAsStringSync();
+    final firebase = File('lib/chat/providers/auth_provider.dart')
+        .readAsStringSync();
+    final preferences = File('lib/constant/preferences.dart').readAsStringSync();
+    expect(signIn, isNot(contains('authProvider.handleSignIn(email:')));
+    expect(firebase, isNot(contains('createUserWithEmailAndPassword(')));
+    expect(firebase, isNot(contains('signInWithEmailAndPassword(')));
+    expect(preferences, contains('await FirebaseAuth.instance.signOut();'));
     expect(call, isNot(contains("token: joinToken == '' ? ''")));
   });
 }
