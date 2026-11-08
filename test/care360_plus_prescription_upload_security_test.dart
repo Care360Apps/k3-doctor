@@ -15,8 +15,10 @@ void main() {
       2,
     );
     expect('Bearer ${token.trim()}'.allMatches(src).length, 2);
-    expect('if (res.statusCode < 200 || res.statusCode >= 300)'
+    expect('if (!await _sendCare360Prescription(ctx, request)) return;'
         .allMatches(src).length, 2);
+    expect(src, contains('response.statusCode < 200 || response.statusCode >= 300'));
+    expect(src, contains("decoded['success'] != true"));
     expect(src, isNot(contains('print(res);')));
     expect(src, isNot(contains('"content-type": "multipart/form-data"')));
     expect(src, contains('http.MultipartFile.fromPath('));
