@@ -29,17 +29,24 @@ class SharedPreferenceHelper {
         value = await _secureStorage.read(key: key);
       } catch (_) {}
       final legacy = _preferences!.getString(key);
-      if ((value == null || value.isEmpty) && legacy != null && legacy.isNotEmpty && legacy != 'N_A') {
-        value = legacy;
+      if ((value == null || value.isEmpty) &&
+          legacy != null && legacy.isNotEmpty && legacy != 'N_A') {
+        // Migration is only successful after durable keystore persistence.
+        // Never trust a plaintext legacy token when secure storage fails.
         try {
-          await _secureStorage.write(key: key, value: value);
-        } catch (_) {}
+          await _secureStorage.write(key: key, value: legacy);
+          value = legacy;
+        } catch (_) {
+          value = null;
+        }
       }
       if (legacy != null) {
         await _preferences!.remove(key);
       }
       if (value != null && value.isNotEmpty) {
         _secureCache[key] = value;
+      } else {
+        _secureCache.remove(key);
       }
     }
     return _preferences;
