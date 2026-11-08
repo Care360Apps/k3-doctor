@@ -120,9 +120,12 @@ class SharedPreferenceHelper {
     }
   }
 
+  /// Legacy synchronous logout is unsafe: it cannot await secure token
+  /// deletion or Firebase sign-out. Callers must migrate to clearPrefSecurely.
+  @Deprecated('Use await clearPrefSecurely() to complete credential revocation.')
   static void clearPref() {
-    _preferences!.clear();
-    _secureCache.clear();
-    _secureStorage.deleteAll().catchError((_) {});
+    throw StateError(
+      'Synchronous logout is disabled; use await clearPrefSecurely().',
+    );
   }
 }
