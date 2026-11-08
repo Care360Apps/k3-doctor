@@ -6,8 +6,7 @@ import 'package:http/http.dart' as http;
 ///
 /// Authenticated documents are fetched only from the configured Care360 API.
 /// Never open arbitrary links from an appointment record with an access token.
-/// The downloaded bytes are kept in memory until a user explicitly chooses
-/// where to save them in the system file picker.
+/// Downloaded PDF bytes remain in memory and are not handed to external apps.
 class Care360MedicalPdfClient {
   Care360MedicalPdfClient({
     required this.apiBase,
@@ -49,33 +48,28 @@ class Care360MedicalPdfClient {
     }
 
     _validateApiBase();
-    // For a private PDF, construct our own appointment-scoped API URL rather
-    // than trusting the server-supplied path or query.
-    final isPrivate = isPrivatePrescriptionLink(source);
-    final uri = isPrivate
-        ? privatePrescriptionUri(appointmentId)
-        : Uri.tryParse(source);
-    if (uri == null) {
+    // Legacy /prescription/upload links were publicly accessible. Never
+    // download them even from our own host: serving them in an authenticated
+    // mobile viewer does not revoke the public web URL. The backend must
+    // migrate existing files and return appointment-scoped private endpoints.
+    if (!isPrivatePrescriptionLink(source)) {
+      throw const FormatException(
+          'Legacy prescription requires private-file migration.');
+    }
+    final suppliedUri = Uri.tryParse(source);
+    if (suppliedUri == null) {
       throw const FormatException('Invalid prescription link.');
     }
-    _requireApprovedOrigin(uri);
-
-    if (!isPrivate) {
-      // Temporary compatibility with records not yet migrated from legacy
-      // public storage. This never makes old server URLs private.
-      if (!RegExp(r'^/prescription/upload/[a-zA-Z0-9_-]{8,100}\.pdf$')
-          .hasMatch(uri.path) ||
-          uri.hasQuery ||
-          uri.hasFragment) {
-        throw const FormatException('Untrusted legacy prescription link.');
-      }
+    _requireApprovedOrigin(suppliedUri);
+    final uri = privatePrescriptionUri(appointmentId);
+    if (suppliedUri.path != uri.path ||
+        suppliedUri.hasQuery || suppliedUri.hasFragment) {
+      throw const FormatException('Prescription appointment mismatch.');
     }
 
-    final token = isPrivate ? (await readToken())?.trim() : null;
-    if (isPrivate && (token == null ||
-        token.isEmpty ||
-        token == 'N_A' ||
-        token == 'null')) {
+    final token = (await readToken())?.trim();
+    if (token == null || token.isEmpty ||
+        token == 'N_A' || token == 'null') {
       throw const MedicalPdfException('Sign in to access this prescription.');
     }
 
@@ -83,9 +77,7 @@ class Care360MedicalPdfClient {
       ..followRedirects = false
       ..persistentConnection = false
       ..headers['Accept'] = 'application/pdf';
-    if (isPrivate) {
-      request.headers['Authorization'] = 'Bearer $token';
-    }
+    request.headers['Authorization'] = 'Bearer $token';
 
     final response = await _client.send(request);
     if (response.statusCode != 200) {
