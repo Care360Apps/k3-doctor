@@ -2086,7 +2086,8 @@ class _LoginHomeScreenState extends State<LoginHomeScreen> {
   }
 
   Future<void> logoutUser() async {
-    SharedPreferenceHelper.clearPref();
+    await SharedPreferenceHelper.clearPrefSecurely();
+    if (!mounted) return;
     Navigator.pushAndRemoveUntil(
       context,
       MaterialPageRoute(builder: (BuildContext context) => SignIn()),
