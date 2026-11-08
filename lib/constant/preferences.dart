@@ -95,10 +95,11 @@ class SharedPreferenceHelper {
   //deletes..
   static Future<bool> remove(String key) async {
     if (_secureKeys.contains(key)) {
+      // Do not report success if a revoked credential remains on disk.
+      // Retain the in-memory token until deletion succeeds so callers can
+      // distinguish an incomplete sign-out from a completed one.
+      await _secureStorage.delete(key: key);
       _secureCache.remove(key);
-      try {
-        await _secureStorage.delete(key: key);
-      } catch (_) {}
       return true;
     }
     return await _preferences!.remove(key);
