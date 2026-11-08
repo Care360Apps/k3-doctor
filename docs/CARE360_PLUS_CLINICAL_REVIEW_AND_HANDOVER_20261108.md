@@ -62,9 +62,10 @@ Design reference: existing Care360 medical navy/teal, existing bundled logo and 
 2. **Upload transport:** use secure cached bearer session, reject unauthenticated attempts and redirects, bound request and response wait to 30 seconds, accept only HTTP 2xx with explicit `success: true`. A failed/uncertain upload does not display a successful preview. After confirmed upload, refresh server appointment state.
 3. **Private PDF retrieval:** reject public legacy `/prescription/upload/...` links on Plus. Only HTTPS, same-origin, appointment-matching `/api/medical-files/appointments/{id}/prescription` is eligible. Require bearer token, refuse redirects, enforce 10 MB cap/PDF signature and render in app memory. **Important:** refusal does not remove the historical public file from the server. Backend migration and public access withdrawal remain P0 blockers.
 4. **Clinical notes:** secondary client-side Doctor-role and valid-session gate; no edit path for finalized notes. Backend must still enforce appointment ownership, approved clinician role and immutable finalization.
-5. **Agora:** deny missing clinician session, RTC token, App ID, channel, or outgoing recipient before joining. Await the join operation. Move emergency engine-release timer from call initialization to the leave sequence so an active call is not automatically released 10 seconds after joining. Server must bind tokens to the authorized appointment.
+5. **Agora:** deny missing clinician session, RTC token, App ID, channel, or outgoing recipient before joining. Await the join operation. Move emergency engine-release timer from call initialization to the leave sequence so an active call is not automatically released 10 seconds after joining. An accessible audio-only toggle suppresses local video while retaining the authorized audio session. Server must bind tokens to the authorized appointment.
 6. **Session integrity:** await OS keystore/keychain token persistence before navigating on login. Don't report secure storage writes as successful if they fail. Await sensitive session deletion and Firebase sign-out on known logout routes.
-7. **CI:** change Flutter pin to 3.38.4 to match the lockfile; add stacked visual and clinical safety tests to the quality job.
+7. **Chat password safety:** the SignIn flow no longer reuses the clinician password for Firebase registration/sign-in; the legacy AuthProvider password method is disabled. Chat requires a valid Laravel-issued Firebase custom token, otherwise it remains unavailable. This deliberately removes an unsafe fallback and requires backend token support.
+8. **CI:** change Flutter pin to 3.38.4 to match the lockfile; add stacked visual and clinical safety tests to the quality job.
 
 ## Workflow/functionality matrix
 | Area | Observed source | Verification required |
@@ -87,7 +88,7 @@ Design reference: existing Care360 medical navy/teal, existing bundled logo and 
 - `GET/POST/PATCH /api/doctor-notes`: scope by authenticated Doctor and appointment; authorize read/write separately; no edit/delete of finalized notes; append new addendum and audit all changes.
 - Agora token endpoint: require approved clinician, active booked appointment, authorized recipient, appropriate time window, short-lived token, dedicated non-guessable channel. Forbid tokens based solely on an arbitrary `to_id`.
 - Provider role API: category/license scopes, video/home visit permissions, price, opt-in radius and shift expiry. Never grant prescribing privileges based on UI flags.
-- Chat: backend Firebase custom tokens for the correct clinician identity; Firestore security rules for per-appointment conversation membership; revoke on logout/account disable; remove client-password Firebase fallback after compatible rollout.
+- Chat: backend Firebase custom tokens for the correct clinician identity; Firestore security rules for per-appointment conversation membership; revoke on logout/account disable; the removed client-password Firebase fallback now requires Laravel custom-token parity and provider-specific Firestore authorization before launch.
 - Payments: validate status server-side with payment provider; client callback alone must never finalize patient access/earnings; keep payment keys off-device.
 - Historical PDFs, lab reports and images: inventory -> private copy -> ownership/metadata reconciliation -> authorization checks -> revoke public serving -> audit. Preserve old records until verified; no public migration shortcut. Coordinate separately with backend owner.
 
@@ -107,7 +108,7 @@ Design reference: existing Care360 medical navy/teal, existing bundled logo and 
 | P03 | Eligible Provider enables home visits/on-duty | only server-confirmed shift displayed |
 | P04 | Doctor attempts Provider-only home visit | denied |
 | T01 | Agora missing/expired token, absent recipient | no RTC join, safe error |
-| T02 | Two fictional clinician/patient accounts with authorized appointment | stable call beyond 10 seconds, hangup releases engine |
+| T02 | Two fictional clinician/patient accounts with authorized appointment | stable call beyond 10 seconds, audio-only switch and return to video, hangup releases engine |
 | T03 | Third-party user attempts Agora/Firestore session | server token/rules refuse access |
 | A01 | Logout and change accounts on Android/iOS | secure bearer removed, Firebase signed out, no prior notes/chat |
 | C01 | 320px UI, large text, reduced bandwidth, locale switch | no overflow; language fallback accurate |
