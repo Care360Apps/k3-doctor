@@ -5,14 +5,13 @@ import 'package:doctro/localization/localization_constant.dart';
 import 'package:doctro/pdf_creation/pdf_viewer_page.dart';
 import 'package:doctro/retrofit/apis.dart';
 import 'package:pdf/pdf.dart';
-import 'dart:io';
-import 'package:path_provider/path_provider.dart';
+import 'dart:convert';
 import 'package:flutter/material.dart' as material;
 import 'package:pdf/widgets.dart';
 import 'package:http/http.dart' as http;
 import 'package:http_parser/http_parser.dart';
 
-reportView(ctx, List<Map<String, dynamic>> pdfData, int? id, int? userId, String convertMedicine) async {
+Future<bool> reportView(material.BuildContext ctx, List<Map<String, dynamic>> pdfData, int? id, int? userId, String convertMedicine) async {
   final Document pdf = Document();
   pdf.addPage(MultiPage(
       pageFormat: PdfPageFormat.letter.copyWith(marginBottom: 1.5 * PdfPageFormat.cm),
@@ -57,86 +56,91 @@ reportView(ctx, List<Map<String, dynamic>> pdfData, int? id, int? userId, String
             ),
           ]));
 
-  if (Platform.isAndroid) {
-    final Directory? appDirectory = await getExternalStorageDirectory();
-
-    final String outputDirectory = '${appDirectory!.path}/GeneratedPdf';
-    await Directory(outputDirectory).create(recursive: true);
-    final String currentTime = DateTime.now().millisecondsSinceEpoch.toString();
-    final File file = File('$outputDirectory/$currentTime.pdf');
-
-    Preferences.filePath = file.path;
-    Preferences.fileName = "$currentTime.pdf";
-    await file.writeAsBytes(await pdf.save()).then((value) async {
-      var fullUrl = Uri.parse("${Apis.baseUrl}add_prescription");
-
-      var token = SharedPreferenceHelper.getString(Preferences.auth_token);
-      var request = http.MultipartRequest("POST", fullUrl);
-      Map<String, String> headers = {"Authorization": "Bearer $token", "content-type": "multipart/form-data", "Accept": "application/json"};
-      try {
-        request.files.add(
-          await http.MultipartFile.fromPath(
-            'pdf',
-            Preferences.filePath,
-            contentType: MediaType('application', 'pdf'),
-            filename: Preferences.fileName,
-          ),
-        );
-      } catch (e) {
-        print(e.toString());
-      }
-
-      request.headers.addAll(headers);
-      request.fields.addAll({"appointment_id": id.toString(), "user_id": userId.toString(), "medicines": convertMedicine});
-
-      var res = await request.send();
-      print(res);
-    });
-    material.Navigator.of(ctx).push(
-      material.MaterialPageRoute(
-        builder: (_) => PdfViewerPage(path: file),
-      ),
-    );
-  } else if (Platform.isIOS) {
-    final Directory? appDirectory = await getApplicationDocumentsDirectory();
-
-    final String outputDirectory = '${appDirectory!.path}/GeneratedPdf';
-    await Directory(outputDirectory).create(recursive: true);
-    final String currentTime = DateTime.now().millisecondsSinceEpoch.toString();
-    final File file = File('$outputDirectory/$currentTime.pdf');
-
-    Preferences.filePath = file.path;
-    Preferences.fileName = "$currentTime.pdf";
-    await file.writeAsBytes(await pdf.save()).then((value) async {
-      var fullUrl = Uri.parse("${Apis.baseUrl}add_prescription");
-
-      var token = Apis.baseUrl;
-      var request = http.MultipartRequest("POST", fullUrl);
-      Map<String, String> headers = {"Authorization": "Bearer $token", "content-type": "multipart/form-data"};
-
-      try {
-        request.files.add(
-          await http.MultipartFile.fromPath(
-            'pdf',
-            Preferences.filePath,
-            contentType: MediaType('application', 'pdf'),
-            filename: Preferences.fileName,
-          ),
-        );
-      } catch (e) {
-        print(e.toString());
-      }
-
-      request.headers.addAll(headers);
-      request.fields.addAll({"appointment_id": id.toString(), "user_id": userId.toString(), "medicines": convertMedicine});
-
-      var res = await request.send();
-      print(res);
-    });
-    material.Navigator.of(ctx).push(
-      material.MaterialPageRoute(
-        builder: (_) => PdfViewerPage(path: file),
-      ),
-    );
+  // All supported platforms use an in-memory PDF. Never create an
+  // unencrypted, persistent medical file in public or shared storage.
+  if (!ctx.mounted || id == null || id <= 0 || userId == null || userId <= 0) {
+    if (ctx.mounted) _showUploadFailure(ctx);
+    return false;
   }
+
+  final token = SharedPreferenceHelper.getString(Preferences.auth_token).trim();
+  if (token.isEmpty || token == 'N_A' || token == 'null') {
+    material.ScaffoldMessenger.of(ctx).showSnackBar(const material.SnackBar(
+      content: material.Text('Sign in to upload a prescription.'),
+    ));
+    return false;
+  }
+
+  try {
+    final pdfBytes = await pdf.save();
+    if (pdfBytes.isEmpty || pdfBytes.length > 10 * 1024 * 1024) {
+      _showUploadFailure(ctx);
+      return false;
+    }
+
+    final request = http.MultipartRequest(
+      'POST', Uri.parse('${Apis.baseUrl}add_prescription'),
+    );
+    request.headers.addAll({
+      'Authorization': 'Bearer $token',
+      'Accept': 'application/json',
+    });
+    request.fields.addAll({
+      'appointment_id': id.toString(),
+      'user_id': userId.toString(),
+      'medicines': convertMedicine,
+    });
+    request.files.add(http.MultipartFile.fromBytes(
+      'pdf',
+      pdfBytes,
+      filename: 'care360-prescription.pdf',
+      contentType: MediaType('application', 'pdf'),
+    ));
+
+    if (!await _sendCare360Prescription(ctx, request)) return false;
+    if (!ctx.mounted) return false;
+
+    // Preview only after the authenticated Laravel API confirms success.
+    // Nothing is saved to shared Downloads or even private app storage.
+    material.Navigator.of(ctx).push(
+      material.MaterialPageRoute(
+        builder: (_) => PdfViewerPage(bytes: pdfBytes),
+      ),
+    );
+    return true;
+  } catch (_) {
+    _showUploadFailure(ctx);
+    return false;
+  }
+}
+
+Future<bool> _sendCare360Prescription(
+    material.BuildContext context, http.MultipartRequest request) async {
+  try {
+    final response = await request.send();
+    // HTTP 200 is not enough; the Laravel API can send a JSON failure.
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      _showUploadFailure(context);
+      return false;
+    }
+    final body = await response.stream.bytesToString();
+    final decoded = jsonDecode(body);
+    if (decoded is! Map || decoded['success'] != true) {
+      _showUploadFailure(context);
+      return false;
+    }
+    return true;
+  } catch (_) {
+    _showUploadFailure(context);
+    return false;
+  }
+}
+
+void _showUploadFailure(material.BuildContext context) {
+  if (!context.mounted) return;
+  material.ScaffoldMessenger.of(context).showSnackBar(
+    const material.SnackBar(
+      content: material.Text('Prescription upload failed. Please retry.'),
+    ),
+  );
 }

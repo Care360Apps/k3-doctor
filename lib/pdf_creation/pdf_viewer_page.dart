@@ -1,16 +1,26 @@
 import 'dart:io';
+import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 import 'package:syncfusion_flutter_pdfviewer/pdfviewer.dart';
 
-// ignore: must_be_immutable
+/// Reuses the existing viewer for local files while allowing confidential
+/// newly-generated prescriptions to stay entirely in memory.
 class PdfViewerPage extends StatelessWidget {
-  File? path;
+  final File? path;
+  final Uint8List? bytes;
 
-  PdfViewerPage({this.path});
+  const PdfViewerPage({super.key, this.path, this.bytes});
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(body: Container(child: SfPdfViewer.file(path!)));
+    final document = bytes;
+    return Scaffold(
+      body: document != null
+          ? SfPdfViewer.memory(document)
+          : path != null
+              ? SfPdfViewer.file(path!)
+              : const Center(child: Text('PDF is unavailable.')),
+    );
   }
 }
