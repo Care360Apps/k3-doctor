@@ -1155,11 +1155,19 @@ class _patientDetailsScreenState extends State<patientDetailsScreen> with Ticker
                                                                             toastLength: Toast.LENGTH_SHORT,
                                                                             gravity: ToastGravity.BOTTOM,
                                                                           );
-                                                                        } else if (_days.text.isEmpty) {
+                                                                        } else if (int.tryParse(_days.text.trim()) == null ||
+                                                                            int.parse(_days.text.trim()) < 1 ||
+                                                                            int.parse(_days.text.trim()) > 365) {
                                                                           Fluttertoast.showToast(
-                                                                            msg: getTranslated(context, AppString.please_enter_days).toString(),
+                                                                            msg: 'Enter a duration between 1 and 365 days.',
                                                                             toastLength: Toast.LENGTH_SHORT,
-                                                                            gravity: ToastGravity.BOTTOM,
+                                                                          );
+                                                                        } else if (alertValueFirst != true &&
+                                                                            alertValueSecond != true &&
+                                                                            alertValueThird != true) {
+                                                                          Fluttertoast.showToast(
+                                                                            msg: 'Select at least one daily dose time.',
+                                                                            toastLength: Toast.LENGTH_SHORT,
                                                                           );
                                                                         } else {
                                                                           Map<String, dynamic> param = new HashMap();
@@ -1249,6 +1257,12 @@ class _patientDetailsScreenState extends State<patientDetailsScreen> with Ticker
                                                       final uploaded = await reportView(
                                                         this.context, pdfData, id, userId, convertMedicine);
                                                       if (uploaded && mounted) {
+                                                        // Refresh the server-backed prescription state so a
+                                                        // confirmed upload is not presented as still pending.
+                                                        listOfMedicine.clear();
+                                                        setState(() {
+                                                          appointmentDetail = appointmentDetails();
+                                                        });
                                                         Fluttertoast.showToast(
                                                           msg: getTranslated(context, AppString.pdf_generated).toString(),
                                                           toastLength: Toast.LENGTH_SHORT,
