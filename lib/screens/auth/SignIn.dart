@@ -387,7 +387,7 @@ class _SignInState extends State<SignIn> {
     setState(() => _loginInProgress = true);
     Map<String, dynamic> body = {"email": email.text, "password": password.text, "device_token": SharedPreferenceHelper.getString(Preferences.device_token)};
 
-    SharedPreferenceHelper.setString(Preferences.user_email, email.text);
+    await SharedPreferenceHelper.setString(Preferences.user_email, email.text);
     // Never store the clinician password in plain application preferences.
 
     Login response;
@@ -409,21 +409,21 @@ class _SignInState extends State<SignIn> {
         }
         await SharedPreferenceHelper.setString(Preferences.auth_token, issuedToken);
         if (!mounted) return BaseModel()..data = response;
-        SharedPreferenceHelper.setString(Preferences.name, response.data!.name!);
-        SharedPreferenceHelper.setString(Preferences.phone_no, response.data!.phone!);
-        SharedPreferenceHelper.setString(Preferences.email, response.data!.email!);
-        SharedPreferenceHelper.setString(Preferences.image, response.data!.image!);
-        SharedPreferenceHelper.setString(Preferences.user_role, _loginAsProvider ? 'provider' : 'doctor');
-        SharedPreferenceHelper.setInt(Preferences.is_filled, response.data!.isFilled!);
-        SharedPreferenceHelper.setBoolean(Preferences.is_logged_in, true);
+        await SharedPreferenceHelper.setString(Preferences.name, response.data!.name!);
+        await SharedPreferenceHelper.setString(Preferences.phone_no, response.data!.phone!);
+        await SharedPreferenceHelper.setString(Preferences.email, response.data!.email!);
+        await SharedPreferenceHelper.setString(Preferences.image, response.data!.image!);
+        await SharedPreferenceHelper.setString(Preferences.user_role, _loginAsProvider ? 'provider' : 'doctor');
+        await SharedPreferenceHelper.setInt(Preferences.is_filled, response.data!.isFilled!);
+        await SharedPreferenceHelper.setBoolean(Preferences.is_logged_in, true);
         if (response.data!.approvalStatus != null) {
-          SharedPreferenceHelper.setString(Preferences.approval_status, response.data!.approvalStatus!);
+          await SharedPreferenceHelper.setString(Preferences.approval_status, response.data!.approvalStatus!);
         }
 
         if (response.data!.subscriptionStatus == null) {
-          SharedPreferenceHelper.setInt(Preferences.subscription_status, -1);
+          await SharedPreferenceHelper.setInt(Preferences.subscription_status, -1);
         } else {
-          SharedPreferenceHelper.setInt(Preferences.subscription_status, response.data!.subscriptionStatus!);
+          await SharedPreferenceHelper.setInt(Preferences.subscription_status, response.data!.subscriptionStatus!);
         }
         await SharedPreferenceHelper.setString(
             Preferences.chat_profile, response.data!.fullImage ?? '');
