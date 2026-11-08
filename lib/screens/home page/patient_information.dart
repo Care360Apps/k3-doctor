@@ -47,14 +47,12 @@ class patientDetailsScreen extends StatefulWidget {
   _patientDetailsScreenState createState() => _patientDetailsScreenState();
 }
 
-//Pass Medicine list in pdf
-List medicineData = [];
-List<Map<String, dynamic>> listOfMedicine = [];
-
-//Add Medicine List
-List<String> medicineReq = [];
-
 class _patientDetailsScreenState extends State<patientDetailsScreen> with TickerProviderStateMixin {
+  // Prescription drafts and medicine options belong to this appointment's
+  // State. They must never leak between two patient detail screens.
+  final List<Map<String, dynamic>> medicineData = [];
+  final List<Map<String, dynamic>> listOfMedicine = [];
+  final List<String> medicineReq = [];
   bool get _canPrescribe => Care360ProfessionalRole.canCreatePrescription(
     SharedPreferenceHelper.getString(Preferences.user_role),
   );
@@ -116,7 +114,6 @@ class _patientDetailsScreenState extends State<patientDetailsScreen> with Ticker
     Provider.of<chatAuth.AuthProvider>(context, listen: false).ensureFirebaseUser();
     id = widget.id;
     appointmentDetail = appointmentDetails();
-    listOfMedicine.clear();
     allMedicinesRequest();
   }
 
@@ -1206,7 +1203,14 @@ class _patientDetailsScreenState extends State<patientDetailsScreen> with Ticker
                                           sectionCard(
                                             child: SingleChildScrollView(
                                               scrollDirection: Axis.horizontal,
-                                              child: DataTableWidget(),
+                                              child: DataTableWidget(
+                                                medicines: listOfMedicine,
+                                                onDelete: (medicine) {
+                                                  setState(() {
+                                                    listOfMedicine.remove(medicine);
+                                                  });
+                                                },
+                                              ),
                                             ),
                                           ),
                                           sectionCard(
@@ -1359,6 +1363,7 @@ class _patientDetailsScreenState extends State<patientDetailsScreen> with Ticker
       medicineReq.clear();
 
       response = await RestClient(RetroApi().dioData()).allMedicines();
+      if (!mounted) return BaseModel()..data = response;
       setState(() {
         for (int i = 0; i < response.data!.length; i++) {
           medicineReq.add(response.data![i].name.toString());
@@ -1469,12 +1474,16 @@ class _patientDetailsScreenState extends State<patientDetailsScreen> with Ticker
   }
 }
 
-class DataTableWidget extends StatefulWidget {
-  @override
-  _DataTableWidgetState createState() => _DataTableWidgetState();
-}
+class DataTableWidget extends StatelessWidget {
+  const DataTableWidget({
+    super.key,
+    required this.medicines,
+    required this.onDelete,
+  });
 
-class _DataTableWidgetState extends State<DataTableWidget> {
+  final List<Map<String, dynamic>> medicines;
+  final ValueChanged<Map<String, dynamic>> onDelete;
+
   @override
   Widget build(BuildContext context) {
     return DataTable(
@@ -1488,24 +1497,22 @@ class _DataTableWidgetState extends State<DataTableWidget> {
         DataColumn(label: Text(getTranslated(context, AppString.pdf_medicine_night).toString())),
         DataColumn(label: Text(getTranslated(context, AppString.pdf_medicine_status).toString())),
       ],
-      rows: listOfMedicine
+      rows: medicines
           .map(
-            ((element) => DataRow(
-                  cells: <DataCell>[
-                    DataCell(Text(element["name"].toString())), //Extracting from Map element the value
-                    DataCell(Text(element["day"])),
-                    DataCell(element["morning"] ? Icon(Icons.check, size: 20) : Icon(Icons.clear, size: 20)),
-                    DataCell(element["afternoon"] ? Icon(Icons.check, size: 20) : Icon(Icons.clear, size: 20)),
-                    DataCell(element["night"] ? Icon(Icons.check, size: 20) : Icon(Icons.clear, size: 20)),
-                    DataCell(GestureDetector(
-                        onTap: () {
-                          setState(() {
-                            listOfMedicine.remove(element);
-                          });
-                        },
-                        child: Icon(Icons.delete, size: 20))),
-                  ],
+            (element) => DataRow(
+              cells: <DataCell>[
+                DataCell(Text(element["name"].toString())),
+                DataCell(Text(element["day"].toString())),
+                DataCell(element["morning"] == true ? const Icon(Icons.check, size: 20) : const Icon(Icons.clear, size: 20)),
+                DataCell(element["afternoon"] == true ? const Icon(Icons.check, size: 20) : const Icon(Icons.clear, size: 20)),
+                DataCell(element["night"] == true ? const Icon(Icons.check, size: 20) : const Icon(Icons.clear, size: 20)),
+                DataCell(IconButton(
+                  tooltip: 'Remove medicine',
+                  icon: const Icon(Icons.delete_outline, size: 20),
+                  onPressed: () => onDelete(element),
                 )),
+              ],
+            ),
           )
           .toList(),
     );
