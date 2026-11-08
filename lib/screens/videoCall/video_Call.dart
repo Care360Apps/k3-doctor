@@ -382,12 +382,9 @@ class _VideoCallState extends State<VideoCall> {
     _leaveTimeoutTimer?.cancel();
     _leaveTimeoutTimer = null;
 
-    // If the user didn't explicitly end, request a leave.
-    if (!_isEnding) {
-      unawaited(_leaveChannelOnce());
-    }
-    // Always release (idempotent), but avoid releasing twice.
-    unawaited(_releaseEngineOnce());
+    // Leave before releasing the native engine. Starting both operations
+    // independently caused a race on Android/iOS and occasional call crashes.
+    unawaited(_leaveChannelOnce().whenComplete(_releaseEngineOnce));
 
     super.dispose();
   }
