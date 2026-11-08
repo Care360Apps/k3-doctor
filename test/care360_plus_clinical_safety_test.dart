@@ -72,6 +72,16 @@ void main() {
         .readAsStringSync();
     final preferences = File('lib/constant/preferences.dart').readAsStringSync();
     expect(signIn, isNot(contains('authProvider.handleSignIn(email:')));
+    final loginSuccess = signIn.indexOf('if (response.success == true)');
+    final identityWrite = signIn.indexOf(
+        'await SharedPreferenceHelper.setString(Preferences.user_email, email.text)');
+    expect(loginSuccess, greaterThanOrEqualTo(0));
+    expect(identityWrite, greaterThan(loginSuccess));
+    expect(signIn, contains(
+        'await SharedPreferenceHelper.setString(Preferences.user_role, _loginAsProvider'));
+    expect(signIn, contains(
+        'await SharedPreferenceHelper.setBoolean(Preferences.is_logged_in, true)'));
+    expect(preferences, contains('await _secureStorage.write(key: key, value: legacy);'));
     expect(firebase, isNot(contains('createUserWithEmailAndPassword(')));
     expect(firebase, isNot(contains('signInWithEmailAndPassword(')));
     expect(preferences, contains('await FirebaseAuth.instance.signOut();'));
