@@ -56,10 +56,10 @@ class SharedPreferenceHelper {
       throw StateError('Storing a password in SharedPreferences is prohibited.');
     }
     if (_secureKeys.contains(key)) {
+      // Never claim a successful login if keystore/keychain persistence fails.
+      // Do not fall back to plaintext app preferences.
+      await _secureStorage.write(key: key, value: value);
       _secureCache[key] = value;
-      try {
-        await _secureStorage.write(key: key, value: value);
-      } catch (_) {}
       return true;
     }
     return await _preferences!.setString(key, value);
@@ -94,6 +94,16 @@ class SharedPreferenceHelper {
       return true;
     }
     return await _preferences!.remove(key);
+  }
+
+  /// Await secure logout before navigating to a different account.
+  static Future<void> clearPrefSecurely() async {
+    _secureCache.clear();
+    try {
+      await _secureStorage.delete(key: Preferences.auth_token);
+    } finally {
+      await _preferences!.clear();
+    }
   }
 
   static void clearPref() {
