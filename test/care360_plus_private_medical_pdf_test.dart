@@ -152,7 +152,7 @@ void main() {
     expect(screen, isNot(contains('launchUrl(Uri.parse("\$pdf"))')));
     expect(viewer, contains('SfPdfViewer.memory('));
     expect(viewer, isNot(contains('launchUrl(')));
-    expect(viewer, isNot(contains('File('));
+    expect(viewer, isNot(contains('File(')));
     expect(upload, contains('_sendCare360Prescription(ctx, request)'));
   });
 }
