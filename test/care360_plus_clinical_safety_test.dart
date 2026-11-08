@@ -75,6 +75,16 @@ void main() {
     expect(firebase, isNot(contains('createUserWithEmailAndPassword(')));
     expect(firebase, isNot(contains('signInWithEmailAndPassword(')));
     expect(preferences, contains('await FirebaseAuth.instance.signOut();'));
+    final patientDetails = File('lib/screens/home page/patient_information.dart')
+        .readAsStringSync();
+    final stateStart = patientDetails.indexOf(
+        'class _patientDetailsScreenState extends State<patientDetailsScreen>');
+    final medicineList = patientDetails.indexOf(
+        'final List<Map<String, dynamic>> listOfMedicine = [];');
+    expect(medicineList, greaterThan(stateStart));
+    expect(patientDetails, contains('class DataTableWidget extends StatelessWidget'));
+    expect(patientDetails, contains('medicines: listOfMedicine'));
+    expect(patientDetails, contains('onDelete: (medicine)'));
     expect(call, isNot(contains("token: joinToken == '' ? ''")));
   });
 }
