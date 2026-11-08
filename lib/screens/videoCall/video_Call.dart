@@ -191,6 +191,24 @@ class _VideoCallState extends State<VideoCall> {
                 ),
               ),
               Expanded(
+                child: Tooltip(
+                  message: mutedVideo ? 'Resume video' : 'Switch to audio-only',
+                  child: RawMaterialButton(
+                    onPressed: _onToggleVideo,
+                    child: Icon(
+                      mutedVideo ? Icons.videocam_off : Icons.videocam,
+                      color: mutedVideo ? colorWhite : loginButton,
+                      size: overlayProvider.inPipMode == true ? 12.0 : 15.0,
+                    ),
+                    shape: const CircleBorder(),
+                    elevation: 2.0,
+                    fillColor: mutedVideo ? loginButton : colorWhite,
+                    padding: EdgeInsets.all(
+                        overlayProvider.inPipMode == true ? 5.0 : 12.0),
+                  ),
+                ),
+              ),
+              Expanded(
                 child: RawMaterialButton(
                   onPressed: _onSwitchCamera,
                   child: Icon(
@@ -222,8 +240,21 @@ class _VideoCallState extends State<VideoCall> {
     _engine?.muteLocalAudioStream(muted);
   }
 
+  Future<void> _onToggleVideo() async {
+    final engine = _engine;
+    if (engine == null || _isDisposed) return;
+    final nextMuted = !mutedVideo;
+    try {
+      // Only suppress outgoing video; keep the authorized Agora audio session.
+      await engine.muteLocalVideoStream(nextMuted);
+      _safeSetState(() => mutedVideo = nextMuted);
+    } catch (_) {
+      Fluttertoast.showToast(msg: 'Unable to change video mode.');
+    }
+  }
+
   void _onSwitchCamera() {
-    _engine?.switchCamera();
+    if (!mutedVideo) _engine?.switchCamera();
   }
 
   Future<void> initAgora() async {
@@ -504,6 +535,14 @@ class _VideoCallState extends State<VideoCall> {
   Widget _localPreview() {
     final engine = _engine;
     if (engine == null) return const SizedBox.shrink();
+    if (mutedVideo) {
+      return const Center(
+        child: Semantics(
+          label: 'Your camera is off. Audio-only consultation is active.',
+          child: Icon(Icons.mic, size: 36),
+        ),
+      );
+    }
     return AgoraVideoView(
       controller: VideoViewController(
         rtcEngine: engine,
