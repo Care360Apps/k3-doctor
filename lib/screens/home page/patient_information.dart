@@ -1216,7 +1216,7 @@ class _patientDetailsScreenState extends State<patientDetailsScreen> with Ticker
                                                     padding: EdgeInsets.symmetric(vertical: 12),
                                                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                                                   ),
-                                                  onPressed: () {
+                                                  onPressed: () async {
                                                     medicineData.clear();
                                                     Map<String, dynamic> medicines;
                                                     for (int i = 0; i < listOfMedicine.length; i++) {
@@ -1246,12 +1246,15 @@ class _patientDetailsScreenState extends State<patientDetailsScreen> with Ticker
                                                     }
 
                                                     if (pdfData.length > 0) {
-                                                      reportView(this.context, pdfData, id, userId, convertMedicine);
-                                                      Fluttertoast.showToast(
-                                                        msg: getTranslated(context, AppString.pdf_generated).toString(),
-                                                        toastLength: Toast.LENGTH_SHORT,
-                                                        gravity: ToastGravity.BOTTOM,
-                                                      );
+                                                      final uploaded = await reportView(
+                                                        this.context, pdfData, id, userId, convertMedicine);
+                                                      if (uploaded && mounted) {
+                                                        Fluttertoast.showToast(
+                                                          msg: getTranslated(context, AppString.pdf_generated).toString(),
+                                                          toastLength: Toast.LENGTH_SHORT,
+                                                          gravity: ToastGravity.BOTTOM,
+                                                        );
+                                                      }
                                                     } else {
                                                       Fluttertoast.showToast(
                                                         msg: getTranslated(context, AppString.please_enter_data).toString(),
