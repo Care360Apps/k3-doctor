@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:io';
 
 import 'package:doctro/VideoCall/overlay_handler.dart';
+import 'package:doctro/security/care360_agora_join_policy.dart';
 import 'package:doctro/VideoCall/overlay_service.dart';
 import 'package:doctro/constant/app_string.dart';
 import 'package:doctro/constant/color_constant.dart';
@@ -93,6 +94,13 @@ class _VideoCallState extends State<VideoCall> {
     final engine = _engine;
     if (engine == null) return;
 
+    // The fallback release timeout starts only when leaving, never when a
+    // consultation starts. Otherwise calls are incorrectly cut off at 10s.
+    _leaveTimeoutTimer?.cancel();
+    _leaveTimeoutTimer = Timer(const Duration(seconds: 10), () {
+      if (!_released) unawaited(_releaseEngineOnce());
+    });
+
     try {
       await engine.stopPreview();
     } catch (_) {}
@@ -137,7 +145,6 @@ class _VideoCallState extends State<VideoCall> {
 
   @override
   void initState() {
-    debugPrint("Call End : ${widget.callEnd}\tID : ${widget.id}\tFlag : ${widget.flag}");
     super.initState();
     settingRequest();
     offset = const Offset(20.0, 50.0);
@@ -220,15 +227,30 @@ class _VideoCallState extends State<VideoCall> {
   }
 
   Future<void> initAgora() async {
-    await [Permission.microphone, Permission.camera].request();
-
-    final resolvedAppId = (appId != null && appId!.isNotEmpty) ? appId! : (SharedPreferenceHelper.getString(Preferences.agoraAppId) ?? '');
-    if (resolvedAppId.isEmpty) {
-      debugPrint('Agora init skipped: missing appId');
+    final resolvedAppId = (appId != null && appId!.isNotEmpty)
+        ? appId!.trim()
+        : SharedPreferenceHelper.getString(Preferences.agoraAppId);
+    if (!Care360AgoraJoinPolicy.canJoin(
+      sessionToken: SharedPreferenceHelper.getString(Preferences.auth_token),
+      agoraToken: token,
+      channelId: channelName,
+      appId: resolvedAppId,
+      outgoing: widget.flag == 'OutGoing',
+      remoteUserId: widget.id,
+    )) {
+      Fluttertoast.showToast(
+          msg: 'Secure video session unavailable. Please refresh and retry.');
       return;
     }
 
+    final grants = await [Permission.microphone, Permission.camera].request();
+    if (grants[Permission.microphone]?.isGranted != true) {
+      Fluttertoast.showToast(msg: 'Microphone permission is required for calls.');
+      return;
+    }
+    if (!mounted || _isDisposed) return;
     final canUseLocalVideoCapture = await _isPhysicalDeviceForVideoCapture();
+    if (!mounted || _isDisposed) return;
 
     final engine = await createAgoraRtcEngine();
     _engine = engine;
@@ -236,11 +258,7 @@ class _VideoCallState extends State<VideoCall> {
     _released = false;
     _handledLeave = false;
     _leaveTimeoutTimer?.cancel();
-    _leaveTimeoutTimer = Timer(const Duration(seconds: 10), () {
-      if (_released) return;
-      debugPrint('Agora leave timeout reached, forcing engine release.');
-      unawaited(_releaseEngineOnce());
-    });
+    _leaveTimeoutTimer = null;
 
     await engine.initialize(RtcEngineContext(appId: resolvedAppId));
     await engine.enableVideo();
@@ -255,13 +273,13 @@ class _VideoCallState extends State<VideoCall> {
     engine.registerEventHandler(
       RtcEngineEventHandler(
         onJoinChannelSuccess: (RtcConnection connection, int elapsed) {
-          print("Local user uid : ${connection.localUid} joined the channel");
+          // Never log clinical call participant identifiers.
           _safeSetState(() {
             _localUserJoined = true;
           });
         },
         onUserJoined: (RtcConnection connection, int remoteUid, int elapsed) {
-          print("Remote user uid:$remoteUid joined the channel");
+          // Presence is displayed in-app without logging identity.
           DateTime now = DateTime.now();
           callTime = DateFormat('h:mm a').format(now);
           callDate = DateFormat('yyyy-MM-dd').format(now);
@@ -316,16 +334,10 @@ class _VideoCallState extends State<VideoCall> {
       await engine.startPreview();
     }
 
-    final joinChannelId = (channelName ?? '').trim();
-    if (joinChannelId.isEmpty) {
-      debugPrint('Agora join skipped: missing channelName');
-      Fluttertoast.showToast(msg: 'Unable to start video call. Please try again.');
-      return;
-    }
+    final joinChannelId = channelName!.trim();
+    final joinToken = token!.trim();
 
-    final joinToken = (token == null || token!.isEmpty || token!.toLowerCase() == 'null') ? '' : token!;
-
-    engine.joinChannel(
+    await engine.joinChannel(
       token: joinToken,
       channelId: joinChannelId,
       uid: uid,
@@ -421,15 +433,15 @@ class _VideoCallState extends State<VideoCall> {
     DoctorProfile response;
     try {
       response = await RestClient(RetroApi().dioData()).doctorProfile();
-      if (response.success == true) {
+      if (response.success == true && response.data != null) {
         token = response.data!.agoraToken;
         channelName = response.data!.channelName;
         doctorId = response.data!.id;
         await initAgora();
       }
-      setState(() {});
+      if (mounted) setState(() {});
     } catch (error, stacktrace) {
-      print("Exception occur: $error stackTrace: $stacktrace");
+      // Do not print server errors, tokens or channel identifiers.
       return BaseModel()..setException(ServerError.withError(error: error));
     }
     return BaseModel()..data = response;
@@ -440,14 +452,14 @@ class _VideoCallState extends State<VideoCall> {
     Map<String, dynamic> body = {"to_id": widget.id};
     try {
       response = await RestClient(RetroApi().dioData()).generateDoctorAgoraTokenCall(body);
-      if (response.success == true) {
+      if (response.success == true && response.data != null) {
         channelName = response.data!.cn;
         token = response.data!.token;
         await initAgora();
       }
       setState(() {});
     } catch (error, stacktrace) {
-      print("Exception occur: $error stackTrace: $stacktrace");
+      // No clinical session identifiers in diagnostic logs.
       return BaseModel()..setException(ServerError.withError(error: error));
     }
     return BaseModel()..data = response;
@@ -465,7 +477,7 @@ class _VideoCallState extends State<VideoCall> {
       }
       setState(() {});
     } catch (error, stacktrace) {
-      print("Exception occur: $error stackTrace: $stacktrace");
+      // No clinical session identifiers in diagnostic logs.
       return BaseModel()..setException(ServerError.withError(error: error));
     }
     return BaseModel()..data = response;
@@ -483,7 +495,7 @@ class _VideoCallState extends State<VideoCall> {
     try {
       response = await RestClient(RetroApi().dioData()).videoCallHistoryAddRequest(body);
     } catch (error, stacktrace) {
-      print("Exception occur: $error stackTrace: $stacktrace");
+      // No clinical session identifiers in diagnostic logs.
       return BaseModel()..setException(ServerError.withError(error: error));
     }
     return BaseModel()..data = response;
