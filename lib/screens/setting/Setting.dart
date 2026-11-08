@@ -329,7 +329,8 @@ class _SettingScreenState extends State<SettingScreen> {
   }
 
   Future<void> _logoutUser() async {
-    SharedPreferenceHelper.clearPref();
+    await SharedPreferenceHelper.clearPrefSecurely();
+    if (!mounted) return;
     if (!mounted) return;
     Navigator.pushAndRemoveUntil(
       context,
