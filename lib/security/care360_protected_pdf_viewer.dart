@@ -87,6 +87,8 @@ class _Care360ProtectedPdfViewerState
             key: const Key('private-prescription-in-memory-viewer'),
             canShowPaginationDialog: false,
             canShowPasswordDialog: false,
+            enableHyperlinkNavigation: false,
+            canShowHyperlinkDialog: false,
           );
         },
       ),
