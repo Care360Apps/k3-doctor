@@ -72,7 +72,16 @@ reportView(ctx, List<Map<String, dynamic>> pdfData, int? id, int? userId, String
 
       var token = SharedPreferenceHelper.getString(Preferences.auth_token);
       var request = http.MultipartRequest("POST", fullUrl);
-      Map<String, String> headers = {"Authorization": "Bearer $token", "content-type": "multipart/form-data", "Accept": "application/json"};
+      if (token == 'N_A' || token == 'null' || token.trim().isEmpty) {
+        material.ScaffoldMessenger.of(ctx).showSnackBar(const material.SnackBar(
+          content: material.Text('Sign in to upload a prescription.'),
+        ));
+        return;
+      }
+      Map<String, String> headers = {
+        "Authorization": "Bearer ${token.trim()}",
+        "Accept": "application/json"
+      };
       try {
         request.files.add(
           await http.MultipartFile.fromPath(
@@ -83,14 +92,19 @@ reportView(ctx, List<Map<String, dynamic>> pdfData, int? id, int? userId, String
           ),
         );
       } catch (e) {
-        print(e.toString());
+        throw StateError('Could not attach a prescription PDF.');
       }
 
       request.headers.addAll(headers);
       request.fields.addAll({"appointment_id": id.toString(), "user_id": userId.toString(), "medicines": convertMedicine});
 
       var res = await request.send();
-      print(res);
+      if (res.statusCode < 200 || res.statusCode >= 300) {
+        material.ScaffoldMessenger.of(ctx).showSnackBar(const material.SnackBar(
+          content: material.Text('Prescription upload failed. Please retry.'),
+        ));
+        return;
+      }
     });
     material.Navigator.of(ctx).push(
       material.MaterialPageRoute(
@@ -110,9 +124,18 @@ reportView(ctx, List<Map<String, dynamic>> pdfData, int? id, int? userId, String
     await file.writeAsBytes(await pdf.save()).then((value) async {
       var fullUrl = Uri.parse("${Apis.baseUrl}add_prescription");
 
-      var token = Apis.baseUrl;
+      var token = SharedPreferenceHelper.getString(Preferences.auth_token);
       var request = http.MultipartRequest("POST", fullUrl);
-      Map<String, String> headers = {"Authorization": "Bearer $token", "content-type": "multipart/form-data"};
+      if (token == 'N_A' || token == 'null' || token.trim().isEmpty) {
+        material.ScaffoldMessenger.of(ctx).showSnackBar(const material.SnackBar(
+          content: material.Text('Sign in to upload a prescription.'),
+        ));
+        return;
+      }
+      Map<String, String> headers = {
+        "Authorization": "Bearer ${token.trim()}",
+        "Accept": "application/json"
+      };
 
       try {
         request.files.add(
@@ -124,14 +147,19 @@ reportView(ctx, List<Map<String, dynamic>> pdfData, int? id, int? userId, String
           ),
         );
       } catch (e) {
-        print(e.toString());
+        throw StateError('Could not attach a prescription PDF.');
       }
 
       request.headers.addAll(headers);
       request.fields.addAll({"appointment_id": id.toString(), "user_id": userId.toString(), "medicines": convertMedicine});
 
       var res = await request.send();
-      print(res);
+      if (res.statusCode < 200 || res.statusCode >= 300) {
+        material.ScaffoldMessenger.of(ctx).showSnackBar(const material.SnackBar(
+          content: material.Text('Prescription upload failed. Please retry.'),
+        ));
+        return;
+      }
     });
     material.Navigator.of(ctx).push(
       material.MaterialPageRoute(
