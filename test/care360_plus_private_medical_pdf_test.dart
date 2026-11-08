@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
@@ -137,6 +138,54 @@ void main() {
       throwsA(isA<MedicalPdfException>()));
   });
 
+  test('Token retrieval cannot hang private medical-file access', () async {
+    final stalledToken = Completer<String?>();
+    final service = Care360MedicalPdfClient(
+      apiBase: base,
+      networkTimeout: const Duration(milliseconds: 40),
+      httpClient: MockClient((_) async =>
+          throw StateError('No request may be sent without a token')),
+      readToken: () => stalledToken.future,
+    );
+    await expectLater(
+      service.fetchForAppointment(12, serverPdfUrl:
+          'https://api.example.test/api/medical-files/appointments/12/prescription'),
+      throwsA(isA<MedicalPdfException>()),
+    );
+  });
+
+  test('Stalled response headers are bounded by a timeout', () async {
+    final service = Care360MedicalPdfClient(
+      apiBase: base,
+      networkTimeout: const Duration(milliseconds: 40),
+      httpClient: MockClient((_) async {
+        await Future<void>.delayed(const Duration(milliseconds: 200));
+        return http.Response(validPdf, 200,
+            headers: {'content-type': 'application/pdf'});
+      }),
+      readToken: () async => 'synthetic-token',
+    );
+    await expectLater(
+      service.fetchForAppointment(12, serverPdfUrl:
+          'https://api.example.test/api/medical-files/appointments/12/prescription'),
+      throwsA(isA<MedicalPdfException>()),
+    );
+  });
+
+  test('A trickle of PDF bytes cannot evade the total download deadline', () async {
+    final service = Care360MedicalPdfClient(
+      apiBase: base,
+      networkTimeout: const Duration(milliseconds: 110),
+      httpClient: _TricklingPdfClient(),
+      readToken: () async => 'synthetic-token',
+    );
+    await expectLater(
+      service.fetchForAppointment(12, serverPdfUrl:
+          'https://api.example.test/api/medical-files/appointments/12/prescription'),
+      throwsA(isA<MedicalPdfException>()),
+    );
+  });
+
   test('Plus clinician opens prescriptions using an in-app private viewer', () {
     final screen = File('lib/screens/home page/patient_information.dart')
         .readAsStringSync();
@@ -155,4 +204,18 @@ void main() {
     expect(viewer, isNot(contains('File(')));
     expect(upload, contains('_sendCare360Prescription(ctx, request)'));
   });
+}
+
+class _TricklingPdfClient extends http.BaseClient {
+  @override
+  Future<http.StreamedResponse> send(http.BaseRequest request) async {
+    return http.StreamedResponse(
+      Stream<List<int>>.periodic(
+        const Duration(milliseconds: 20),
+        (_) => '%PDF-1.4\n'.codeUnits,
+      ),
+      200,
+      headers: {'content-type': 'application/pdf'},
+    );
+  }
 }
