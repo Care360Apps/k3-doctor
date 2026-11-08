@@ -107,16 +107,18 @@ class SharedPreferenceHelper {
 
   /// Await secure logout before navigating to a different account.
   static Future<void> clearPrefSecurely() async {
-    _secureCache.clear();
+    // Revoke the durable credential before clearing the in-memory copy.
+    // If keychain deletion fails, surface the error rather than reporting
+    // a successful logout while a reusable token remains on disk.
+    await _secureStorage.delete(key: Preferences.auth_token);
+    _secureCache.remove(Preferences.auth_token);
     try {
       // Chat/Firestore must not remain signed in as the previous clinician.
       await FirebaseAuth.instance.signOut();
     } finally {
-      try {
-        await _secureStorage.delete(key: Preferences.auth_token);
-      } finally {
-        await _preferences!.clear();
-      }
+      // Clear cached profile/role information even when Firebase sign-out
+      // fails, but preserve that failure for the caller to handle.
+      await _preferences!.clear();
     }
   }
 
