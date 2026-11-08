@@ -58,7 +58,7 @@ flowchart TD
 Design reference: existing Care360 medical navy/teal, existing bundled logo and professional healthcare photography, adequate contrast, descriptive controls and 320px narrow-screen navigation. No screenshots from a real app are claimed.
 
 ## Source change inventory in this draft
-1. **Prescription validation:** require Doctor role, 1–50 medicines, valid name, days 1–365, daily dose selection and parity between PDF and uploaded JSON. Deny invalid input before creating/sending medical PDFs.
+1. **Prescription validation:** require Doctor role, 1–50 medicines, valid name, days 1–365, daily dose selection and parity between PDF and uploaded JSON. Deny invalid input before creating/sending medical PDFs. Prescription drafts, medicine catalog and table callbacks are now appointment-scoped screen state rather than file-level globals; opening an unrelated appointment no longer clears/reuses another screen's draft.
 2. **Upload transport:** use secure cached bearer session, reject unauthenticated attempts and redirects, bound request and response wait to 30 seconds, accept only HTTP 2xx with explicit `success: true`. A failed/uncertain upload does not display a successful preview. After confirmed upload, refresh server appointment state.
 3. **Private PDF retrieval:** reject public legacy `/prescription/upload/...` links on Plus. Only HTTPS, same-origin, appointment-matching `/api/medical-files/appointments/{id}/prescription` is eligible. Require bearer token, refuse redirects, enforce 10 MB cap/PDF signature and render in app memory. **Important:** refusal does not remove the historical public file from the server. Backend migration and public access withdrawal remain P0 blockers.
 4. **Clinical notes:** secondary client-side Doctor-role and valid-session gate; no edit path for finalized notes. Backend must still enforce appointment ownership, approved clinician role and immutable finalization.
@@ -100,6 +100,7 @@ Design reference: existing Care360 medical navy/teal, existing bundled logo and 
 | D03 | Doctor A requests Doctor B's appointment/notes/PDF | 403/404, never exposed |
 | D04 | Doctor creates draft, finalizes, attempts edit/delete | saved draft; finalized note immutable |
 | D05 | Missing medicine/duration/dose | no upload request, actionable validation |
+| D05b | Two fictional appointments open; edit draft on A, then view B | B has its own empty draft; A's medicine list remains isolated |
 | D06 | Timeout, 4xx, redirect, 2xx `success:false` | no success preview, retry guidance |
 | D07 | Valid upload with committed private PDF | confirmed once, appointment state refreshed |
 | D08 | Legacy public PDF | fail closed on Plus; backend must remove public access |
