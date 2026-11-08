@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
@@ -32,21 +33,42 @@ void main() {
     service.close();
   });
 
-  test('Legacy PDF only from same host, never receives Authorization', () async {
-    final client = MockClient((request) async {
-      expect(request.url.path,
-          '/prescription/upload/0123456789abcdef0123456789abcdef.pdf');
-      expect(request.headers.containsKey('Authorization'), isFalse);
-      return http.Response(validPdf, 200,
-        headers: {'content-type': 'application/pdf'});
-    });
+  test('Legacy publicly hosted PDFs fail closed pending backend migration', () async {
+    var requests = 0;
     final service = Care360MedicalPdfClient(
       apiBase: base,
-      httpClient: client,
+      httpClient: MockClient((request) async {
+        requests++;
+        return http.Response(validPdf, 200);
+      }),
       readToken: () async => 'synthetic-token',
     );
-    await service.fetchForAppointment(12, serverPdfUrl:
-      'https://api.example.test/prescription/upload/0123456789abcdef0123456789abcdef.pdf');
+    await expectLater(service.fetchForAppointment(12,
+      serverPdfUrl:
+        'https://api.example.test/prescription/upload/0123456789abcdef0123456789abcdef.pdf'),
+        throwsFormatException);
+    expect(requests, 0);
+  });
+
+  test('Different appointment and foreign private URLs are rejected', () async {
+    var requests = 0;
+    final service = Care360MedicalPdfClient(
+      apiBase: base,
+      httpClient: MockClient((request) async {
+        requests++;
+        return http.Response(validPdf, 200);
+      }),
+      readToken: () async => 'synthetic-token',
+    );
+    for (final link in [
+      'https://api.example.test/api/medical-files/appointments/13/prescription',
+      'https://other.example/api/medical-files/appointments/12/prescription',
+      'https://api.example.test/api/medical-files/appointments/12/prescription?access=public',
+    ]) {
+      await expectLater(service.fetchForAppointment(12, serverPdfUrl: link),
+          throwsFormatException);
+    }
+    expect(requests, 0);
   });
 
   test('Foreign host, tampered path and HTTP are rejected before request', () async {
@@ -116,6 +138,54 @@ void main() {
       throwsA(isA<MedicalPdfException>()));
   });
 
+  test('Token retrieval cannot hang private medical-file access', () async {
+    final stalledToken = Completer<String?>();
+    final service = Care360MedicalPdfClient(
+      apiBase: base,
+      networkTimeout: const Duration(milliseconds: 40),
+      httpClient: MockClient((_) async =>
+          throw StateError('No request may be sent without a token')),
+      readToken: () => stalledToken.future,
+    );
+    await expectLater(
+      service.fetchForAppointment(12, serverPdfUrl:
+          'https://api.example.test/api/medical-files/appointments/12/prescription'),
+      throwsA(isA<MedicalPdfException>()),
+    );
+  });
+
+  test('Stalled response headers are bounded by a timeout', () async {
+    final service = Care360MedicalPdfClient(
+      apiBase: base,
+      networkTimeout: const Duration(milliseconds: 40),
+      httpClient: MockClient((_) async {
+        await Future<void>.delayed(const Duration(milliseconds: 200));
+        return http.Response(validPdf, 200,
+            headers: {'content-type': 'application/pdf'});
+      }),
+      readToken: () async => 'synthetic-token',
+    );
+    await expectLater(
+      service.fetchForAppointment(12, serverPdfUrl:
+          'https://api.example.test/api/medical-files/appointments/12/prescription'),
+      throwsA(isA<MedicalPdfException>()),
+    );
+  });
+
+  test('A trickle of PDF bytes cannot evade the total download deadline', () async {
+    final service = Care360MedicalPdfClient(
+      apiBase: base,
+      networkTimeout: const Duration(milliseconds: 110),
+      httpClient: _TricklingPdfClient(),
+      readToken: () async => 'synthetic-token',
+    );
+    await expectLater(
+      service.fetchForAppointment(12, serverPdfUrl:
+          'https://api.example.test/api/medical-files/appointments/12/prescription'),
+      throwsA(isA<MedicalPdfException>()),
+    );
+  });
+
   test('Plus clinician opens prescriptions using an in-app private viewer', () {
     final screen = File('lib/screens/home page/patient_information.dart')
         .readAsStringSync();
@@ -131,7 +201,21 @@ void main() {
     expect(screen, isNot(contains('launchUrl(Uri.parse("\$pdf"))')));
     expect(viewer, contains('SfPdfViewer.memory('));
     expect(viewer, isNot(contains('launchUrl(')));
-    expect(viewer, isNot(contains('File('));
+    expect(viewer, isNot(contains('File(')));
     expect(upload, contains('_sendCare360Prescription(ctx, request)'));
   });
+}
+
+class _TricklingPdfClient extends http.BaseClient {
+  @override
+  Future<http.StreamedResponse> send(http.BaseRequest request) async {
+    return http.StreamedResponse(
+      Stream<List<int>>.periodic(
+        const Duration(milliseconds: 20),
+        (_) => '%PDF-1.4\n'.codeUnits,
+      ),
+      200,
+      headers: {'content-type': 'application/pdf'},
+    );
+  }
 }

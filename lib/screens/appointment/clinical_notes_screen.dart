@@ -1,4 +1,7 @@
 import 'package:doctro/model/doctor_note.dart';
+import 'package:doctro/brand/care360_professional_role.dart';
+import 'package:doctro/constant/preferences.dart';
+import 'package:doctro/constant/prefConstatnt.dart';
 import 'package:doctro/retrofit/api_header.dart';
 import 'package:doctro/retrofit/network_api.dart';
 import 'package:flutter/material.dart';
@@ -24,6 +27,13 @@ class _ClinicalNotesScreenState extends State<ClinicalNotesScreen> {
   bool _saving = false;
   String? _error;
 
+  bool get _hasDoctorAccess {
+    final token = SharedPreferenceHelper.getString(Preferences.auth_token).trim();
+    return Care360ProfessionalRole.canCreatePrescription(
+      SharedPreferenceHelper.getString(Preferences.user_role),
+    ) && token.isNotEmpty && token != 'N_A' && token != 'null';
+  }
+
   @override
   void initState() {
     super.initState();
@@ -38,6 +48,14 @@ class _ClinicalNotesScreenState extends State<ClinicalNotesScreen> {
   }
 
   Future<void> _refresh() async {
+    if (!_hasDoctorAccess || widget.appointmentId <= 0) {
+      if (mounted) setState(() {
+        _loading = false;
+        _notes = const [];
+        _error = 'Clinical notes require an approved doctor session.';
+      });
+      return;
+    }
     if (mounted) setState(() { _loading = true; _error = null; });
     try {
       final result = await RestClient(RetroApi().dioData())
@@ -66,7 +84,14 @@ class _ClinicalNotesScreenState extends State<ClinicalNotesScreen> {
   }
 
   Future<void> _save({required bool finalize}) async {
-    if (_saving) return;
+    if (_saving || !mounted) return;
+    if (!_hasDoctorAccess || widget.appointmentId <= 0 ||
+        _editing?.status == 'final') {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+        content: Text('This account cannot change clinical notes.'),
+      ));
+      return;
+    }
     final title = _title.text.trim();
     final body = _body.text.trim();
     if (title.isEmpty || body.isEmpty) {
@@ -94,6 +119,7 @@ class _ClinicalNotesScreenState extends State<ClinicalNotesScreen> {
       );
       if (confirmed != true || !mounted) return;
     }
+    if (!_hasDoctorAccess) return;
     setState(() => _saving = true);
     try {
       final client = RestClient(RetroApi().dioData());
@@ -132,6 +158,19 @@ class _ClinicalNotesScreenState extends State<ClinicalNotesScreen> {
 
   @override
   Widget build(BuildContext context) {
+    if (!_hasDoctorAccess || widget.appointmentId <= 0) {
+      return Scaffold(
+        appBar: AppBar(title: const Text('Clinical notes')),
+        body: const Center(child: Padding(
+          padding: EdgeInsets.all(24),
+          child: Text(
+            'Clinical notes are available only to authenticated doctors for '
+            'their own appointments.',
+            textAlign: TextAlign.center,
+          ),
+        )),
+      );
+    }
     final theme = Theme.of(context);
     final isEditing = _editing != null;
     return Scaffold(

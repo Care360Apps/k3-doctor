@@ -34,15 +34,16 @@ jobs:
         run: python3 tools/test_agora_token_logging.py
       - name: Verify Gradle Wrapper integrity against official Gradle checksums
         uses: gradle/actions/wrapper-validation@v6
+  # Independent verification: a source-safety failure must not hide Dart
+  # analyzer/compiler errors. Both jobs remain required for a green workflow.
   flutter-analyze:
-    needs: source-safety
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
       - uses: subosito/flutter-action@v2
         with:
-          flutter-version: '3.38.3'
+          flutter-version: '3.38.4'
           channel: stable
           cache: true
       - name: Enable Swift Package Manager for the Paystack plugin metadata
@@ -75,3 +76,13 @@ jobs:
         run: flutter test --no-pub test/k3_offline_smoke_test.dart test/k3_startup_gate_test.dart test/k3_entry_brand_test.dart test/k3_connection_error_test.dart test/k3_auth_contract_test.dart test/care360_locale_partner_test.dart test/care360_public_access_test.dart test/k3_clinical_notes_model_test.dart test/k3_professional_role_test.dart test/professional_availability_contract_test.dart
       - name: Care360 Plus master-brand widget regression
         run: flutter test --no-pub test/care360_brand_test.dart
+      - name: Stacked Plus visual and clinical security regressions (synthetic)
+        run: |
+          flutter test --no-pub \
+            test/care360_plus_first_launch_visual_test.dart \
+            test/care360_plus_language_switch_regression_test.dart \
+            test/care360_plus_dashboard_visual_test.dart \
+            test/care360_plus_service_visual_test.dart \
+            test/care360_plus_prescription_upload_security_test.dart \
+            test/care360_plus_private_medical_pdf_test.dart \
+            test/care360_plus_clinical_safety_test.dart
