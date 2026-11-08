@@ -6,6 +6,7 @@ import 'package:doctro/pdf_creation/pdf_viewer_page.dart';
 import 'package:doctro/retrofit/apis.dart';
 import 'package:pdf/pdf.dart';
 import 'dart:io';
+import 'dart:convert';
 import 'package:path_provider/path_provider.dart';
 import 'package:flutter/material.dart' as material;
 import 'package:pdf/widgets.dart';
@@ -91,20 +92,19 @@ reportView(ctx, List<Map<String, dynamic>> pdfData, int? id, int? userId, String
             filename: Preferences.fileName,
           ),
         );
-      } catch (e) {
-        throw StateError('Could not attach a prescription PDF.');
+      } catch (_) {
+        material.ScaffoldMessenger.of(ctx).showSnackBar(
+          const material.SnackBar(
+            content: material.Text('Could not attach prescription PDF.'),
+          ),
+        );
+        return;
       }
 
       request.headers.addAll(headers);
       request.fields.addAll({"appointment_id": id.toString(), "user_id": userId.toString(), "medicines": convertMedicine});
 
-      var res = await request.send();
-      if (res.statusCode < 200 || res.statusCode >= 300) {
-        material.ScaffoldMessenger.of(ctx).showSnackBar(const material.SnackBar(
-          content: material.Text('Prescription upload failed. Please retry.'),
-        ));
-        return;
-      }
+      if (!await _sendCare360Prescription(ctx, request)) return;
     });
     material.Navigator.of(ctx).push(
       material.MaterialPageRoute(
@@ -146,20 +146,19 @@ reportView(ctx, List<Map<String, dynamic>> pdfData, int? id, int? userId, String
             filename: Preferences.fileName,
           ),
         );
-      } catch (e) {
-        throw StateError('Could not attach a prescription PDF.');
+      } catch (_) {
+        material.ScaffoldMessenger.of(ctx).showSnackBar(
+          const material.SnackBar(
+            content: material.Text('Could not attach prescription PDF.'),
+          ),
+        );
+        return;
       }
 
       request.headers.addAll(headers);
       request.fields.addAll({"appointment_id": id.toString(), "user_id": userId.toString(), "medicines": convertMedicine});
 
-      var res = await request.send();
-      if (res.statusCode < 200 || res.statusCode >= 300) {
-        material.ScaffoldMessenger.of(ctx).showSnackBar(const material.SnackBar(
-          content: material.Text('Prescription upload failed. Please retry.'),
-        ));
-        return;
-      }
+      if (!await _sendCare360Prescription(ctx, request)) return;
     });
     material.Navigator.of(ctx).push(
       material.MaterialPageRoute(
@@ -167,4 +166,35 @@ reportView(ctx, List<Map<String, dynamic>> pdfData, int? id, int? userId, String
       ),
     );
   }
+}
+
+
+Future<bool> _sendCare360Prescription(
+    material.BuildContext context, http.MultipartRequest request) async {
+  try {
+    final response = await request.send();
+    // HTTP 200 is not enough; the Laravel API can send a JSON failure.
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      _showUploadFailure(context);
+      return false;
+    }
+    final body = await response.stream.bytesToString();
+    final decoded = jsonDecode(body);
+    if (decoded is! Map || decoded['success'] != true) {
+      _showUploadFailure(context);
+      return false;
+    }
+    return true;
+  } catch (_) {
+    _showUploadFailure(context);
+    return false;
+  }
+}
+
+void _showUploadFailure(material.BuildContext context) {
+  material.ScaffoldMessenger.of(context).showSnackBar(
+    const material.SnackBar(
+      content: material.Text('Prescription upload failed. Please retry.'),
+    ),
+  );
 }
