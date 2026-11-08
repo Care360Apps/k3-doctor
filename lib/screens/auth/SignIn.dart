@@ -410,13 +410,12 @@ class _SignInState extends State<SignIn> {
         await SharedPreferenceHelper.setString(Preferences.auth_token, issuedToken);
         await SharedPreferenceHelper.setString(Preferences.user_email, email.text);
         if (!mounted) return BaseModel()..data = response;
-        await SharedPreferenceHelper.setString(Preferences.name, response.data!.name!);
-        await SharedPreferenceHelper.setString(Preferences.phone_no, response.data!.phone!);
-        await SharedPreferenceHelper.setString(Preferences.email, response.data!.email!);
-        await SharedPreferenceHelper.setString(Preferences.image, response.data!.image!);
+        await SharedPreferenceHelper.setString(Preferences.name, response.data!.name ?? '');
+        await SharedPreferenceHelper.setString(Preferences.phone_no, response.data!.phone ?? '');
+        await SharedPreferenceHelper.setString(Preferences.email, response.data!.email ?? email.text);
+        await SharedPreferenceHelper.setString(Preferences.image, response.data!.image ?? '');
         await SharedPreferenceHelper.setString(Preferences.user_role, _loginAsProvider ? 'provider' : 'doctor');
-        await SharedPreferenceHelper.setInt(Preferences.is_filled, response.data!.isFilled!);
-        await SharedPreferenceHelper.setBoolean(Preferences.is_logged_in, true);
+        await SharedPreferenceHelper.setInt(Preferences.is_filled, response.data!.isFilled ?? 0);
         if (response.data!.approvalStatus != null) {
           await SharedPreferenceHelper.setString(Preferences.approval_status, response.data!.approvalStatus!);
         }
@@ -432,6 +431,10 @@ class _SignInState extends State<SignIn> {
             Preferences.user_name, response.data!.name ?? '');
         await SharedPreferenceHelper.setString(
             Preferences.doctorId, response.data!.id.toString());
+
+        // Mark login complete only after role, profile and appointment identity
+        // are persisted. This prevents a partially initialized session.
+        await SharedPreferenceHelper.setBoolean(Preferences.is_logged_in, true);
 
         // Only backend-issued Firebase custom tokens may grant clinician chat.
         // Reusing the professional password to create a Firebase identity could
