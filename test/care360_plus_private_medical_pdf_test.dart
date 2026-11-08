@@ -32,21 +32,42 @@ void main() {
     service.close();
   });
 
-  test('Legacy PDF only from same host, never receives Authorization', () async {
-    final client = MockClient((request) async {
-      expect(request.url.path,
-          '/prescription/upload/0123456789abcdef0123456789abcdef.pdf');
-      expect(request.headers.containsKey('Authorization'), isFalse);
-      return http.Response(validPdf, 200,
-        headers: {'content-type': 'application/pdf'});
-    });
+  test('Legacy publicly hosted PDFs fail closed pending backend migration', () async {
+    var requests = 0;
     final service = Care360MedicalPdfClient(
       apiBase: base,
-      httpClient: client,
+      httpClient: MockClient((request) async {
+        requests++;
+        return http.Response(validPdf, 200);
+      }),
       readToken: () async => 'synthetic-token',
     );
-    await service.fetchForAppointment(12, serverPdfUrl:
-      'https://api.example.test/prescription/upload/0123456789abcdef0123456789abcdef.pdf');
+    await expectLater(service.fetchForAppointment(12,
+      serverPdfUrl:
+        'https://api.example.test/prescription/upload/0123456789abcdef0123456789abcdef.pdf'),
+        throwsFormatException);
+    expect(requests, 0);
+  });
+
+  test('Different appointment and foreign private URLs are rejected', () async {
+    var requests = 0;
+    final service = Care360MedicalPdfClient(
+      apiBase: base,
+      httpClient: MockClient((request) async {
+        requests++;
+        return http.Response(validPdf, 200);
+      }),
+      readToken: () async => 'synthetic-token',
+    );
+    for (final link in [
+      'https://api.example.test/api/medical-files/appointments/13/prescription',
+      'https://other.example/api/medical-files/appointments/12/prescription',
+      'https://api.example.test/api/medical-files/appointments/12/prescription?access=public',
+    ]) {
+      await expectLater(service.fetchForAppointment(12, serverPdfUrl: link),
+          throwsFormatException);
+    }
+    expect(requests, 0);
   });
 
   test('Foreign host, tampered path and HTTP are rejected before request', () async {
