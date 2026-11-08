@@ -1,4 +1,6 @@
 import 'package:doctro/constant/app_string.dart';
+import 'package:doctro/brand/care360_professional_role.dart';
+import 'package:doctro/security/care360_prescription_validation.dart';
 import 'package:doctro/constant/prefConstatnt.dart';
 import 'package:doctro/constant/preferences.dart';
 import 'package:doctro/localization/localization_constant.dart';
@@ -12,6 +14,30 @@ import 'package:http/http.dart' as http;
 import 'package:http_parser/http_parser.dart';
 
 Future<bool> reportView(material.BuildContext ctx, List<Map<String, dynamic>> pdfData, int? id, int? userId, String convertMedicine) async {
+  // A direct call to this function must not bypass the role-aware UI.
+  // Laravel must independently verify approved doctor, ownership and status.
+  if (!Care360ProfessionalRole.canCreatePrescription(
+      SharedPreferenceHelper.getString(Preferences.user_role))) {
+    if (ctx.mounted) _showUploadFailure(ctx);
+    return false;
+  }
+  final validationError = Care360PrescriptionValidation.validate(pdfData);
+  dynamic submittedMedicines;
+  try {
+    submittedMedicines = jsonDecode(convertMedicine);
+  } catch (_) {
+    if (ctx.mounted) _showUploadFailure(ctx);
+    return false;
+  }
+  // The document shown to the doctor must match the medicine payload sent to
+  // Laravel; reject stale or inconsistent global list state.
+  if (validationError != null ||
+      submittedMedicines is! List ||
+      jsonEncode(submittedMedicines) != jsonEncode(pdfData)) {
+    if (ctx.mounted) _showUploadFailure(ctx);
+    return false;
+  }
+
   final Document pdf = Document();
   pdf.addPage(MultiPage(
       pageFormat: PdfPageFormat.letter.copyWith(marginBottom: 1.5 * PdfPageFormat.cm),
@@ -81,6 +107,9 @@ Future<bool> reportView(material.BuildContext ctx, List<Map<String, dynamic>> pd
     final request = http.MultipartRequest(
       'POST', Uri.parse('${Apis.baseUrl}add_prescription'),
     );
+    // Never follow a redirect with clinical credentials or prescription data.
+    request.followRedirects = false;
+    request.persistentConnection = false;
     request.headers.addAll({
       'Authorization': 'Bearer $token',
       'Accept': 'application/json',
@@ -117,13 +146,13 @@ Future<bool> reportView(material.BuildContext ctx, List<Map<String, dynamic>> pd
 Future<bool> _sendCare360Prescription(
     material.BuildContext context, http.MultipartRequest request) async {
   try {
-    final response = await request.send();
+    final response = await request.send().timeout(const Duration(seconds: 30));
     // HTTP 200 is not enough; the Laravel API can send a JSON failure.
     if (response.statusCode < 200 || response.statusCode >= 300) {
       _showUploadFailure(context);
       return false;
     }
-    final body = await response.stream.bytesToString();
+    final body = await response.stream.bytesToString().timeout(const Duration(seconds: 30));
     final decoded = jsonDecode(body);
     if (decoded is! Map || decoded['success'] != true) {
       _showUploadFailure(context);
