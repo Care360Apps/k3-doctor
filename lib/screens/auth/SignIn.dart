@@ -402,7 +402,13 @@ class _SignInState extends State<SignIn> {
       CommonFunction.hideDialog(context);
 
       if (response.success == true) {
-        SharedPreferenceHelper.setString(Preferences.auth_token, response.data!.token!);
+        final issuedToken = response.data?.token?.trim();
+        if (issuedToken == null || issuedToken.isEmpty ||
+            issuedToken == 'N_A' || issuedToken == 'null') {
+          throw StateError('Missing secure session token');
+        }
+        await SharedPreferenceHelper.setString(Preferences.auth_token, issuedToken);
+        if (!mounted) return BaseModel()..data = response;
         SharedPreferenceHelper.setString(Preferences.name, response.data!.name!);
         SharedPreferenceHelper.setString(Preferences.phone_no, response.data!.phone!);
         SharedPreferenceHelper.setString(Preferences.email, response.data!.email!);
