@@ -2,6 +2,7 @@ import 'package:doctro/model/doctor_note.dart';
 import 'package:doctro/retrofit/api_header.dart';
 import 'package:doctro/retrofit/network_api.dart';
 import 'package:flutter/material.dart';
+import '../../brand/care360_professional_section_intro.dart';
 
 /// Private, appointment-scoped notes for an approved doctor.
 /// Backend permission checks always decide access; this screen is not a gate.
@@ -134,13 +135,23 @@ class _ClinicalNotesScreenState extends State<ClinicalNotesScreen> {
     final theme = Theme.of(context);
     final isEditing = _editing != null;
     return Scaffold(
-      appBar: AppBar(title: const Text('Clinical notes')),
+      backgroundColor: const Color(0xFFF5F8F7),
+      appBar: AppBar(
+        title: const Text('Clinical notes'),
+        backgroundColor: const Color(0xFF123E4D),
+        foregroundColor: Colors.white,
+      ),
       body: SafeArea(
         child: RefreshIndicator(
           onRefresh: _refresh,
           child: ListView(
             padding: const EdgeInsets.all(16),
             children: [
+              const Care360ProfessionalSectionIntro(
+                title: 'Private clinical workspace',
+                description: 'Appointment-scoped notes and care plans',
+                icon: Icons.lock_person_outlined,
+              ),
               Text('Encounter notes', style: theme.textTheme.titleLarge),
               const SizedBox(height: 6),
               Text(

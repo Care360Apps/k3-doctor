@@ -15,6 +15,7 @@ import 'package:doctro/screens/auth/SignIn.dart';
 import 'package:doctro/screens/home%20page/patient_information.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
+import '../../brand/care360_professional_section_intro.dart';
 
 class AppointmentHistoryScreen extends StatefulWidget {
   @override
@@ -971,6 +972,11 @@ class _AppointmentHistoryScreen extends State<AppointmentHistoryScreen>
                         if (snapshot.connectionState == ConnectionState.done) {
                         return Column(
                                     children: [
+                                      const Care360ProfessionalSectionIntro(
+                                        title: 'Appointment history',
+                                        description: 'Review upcoming and past care visits',
+                                        icon: Icons.event_note_outlined,
+                                      ),
                                       Container(
                               margin: EdgeInsets.symmetric(
                                   horizontal: width * 0.05, vertical: 10),
