@@ -387,8 +387,8 @@ class _SignInState extends State<SignIn> {
     setState(() => _loginInProgress = true);
     Map<String, dynamic> body = {"email": email.text, "password": password.text, "device_token": SharedPreferenceHelper.getString(Preferences.device_token)};
 
-    await SharedPreferenceHelper.setString(Preferences.user_email, email.text);
-    // Never store the clinician password in plain application preferences.
+    // Do not persist an unverified clinician identity before Laravel accepts
+    // the login. Never store the clinician password in app preferences.
 
     Login response;
 
@@ -408,6 +408,7 @@ class _SignInState extends State<SignIn> {
           throw StateError('Missing secure session token');
         }
         await SharedPreferenceHelper.setString(Preferences.auth_token, issuedToken);
+        await SharedPreferenceHelper.setString(Preferences.user_email, email.text);
         if (!mounted) return BaseModel()..data = response;
         await SharedPreferenceHelper.setString(Preferences.name, response.data!.name!);
         await SharedPreferenceHelper.setString(Preferences.phone_no, response.data!.phone!);
