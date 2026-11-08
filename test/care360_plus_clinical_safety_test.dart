@@ -81,6 +81,15 @@ void main() {
         'await SharedPreferenceHelper.setString(Preferences.user_role, _loginAsProvider'));
     expect(signIn, contains(
         'await SharedPreferenceHelper.setBoolean(Preferences.is_logged_in, true)'));
+    final profileWrite = signIn.indexOf(
+        'Preferences.doctorId, response.data!.id.toString()');
+    final loginFlag = signIn.indexOf(
+        'await SharedPreferenceHelper.setBoolean(Preferences.is_logged_in, true)');
+    expect(profileWrite, greaterThanOrEqualTo(0));
+    expect(loginFlag, greaterThan(profileWrite));
+    expect(signIn, contains('response.data!.name ??'));
+    expect(signIn, contains('response.data!.phone ??'));
+    expect(signIn, contains('response.data!.image ??'));
     expect(preferences, contains('await _secureStorage.write(key: key, value: legacy);'));
     expect(firebase, isNot(contains('createUserWithEmailAndPassword(')));
     expect(firebase, isNot(contains('signInWithEmailAndPassword(')));
