@@ -34,8 +34,9 @@ jobs:
         run: python3 tools/test_agora_token_logging.py
       - name: Verify Gradle Wrapper integrity against official Gradle checksums
         uses: gradle/actions/wrapper-validation@v6
+  # Independent verification: a source-safety failure must not hide Dart
+  # analyzer/compiler errors. Both jobs remain required for a green workflow.
   flutter-analyze:
-    needs: source-safety
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
