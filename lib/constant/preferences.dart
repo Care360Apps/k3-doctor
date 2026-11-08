@@ -1,5 +1,6 @@
 import 'package:doctro/constant/prefConstatnt.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 class SharedPreferenceHelper {
@@ -100,9 +101,14 @@ class SharedPreferenceHelper {
   static Future<void> clearPrefSecurely() async {
     _secureCache.clear();
     try {
-      await _secureStorage.delete(key: Preferences.auth_token);
+      // Chat/Firestore must not remain signed in as the previous clinician.
+      await FirebaseAuth.instance.signOut();
     } finally {
-      await _preferences!.clear();
+      try {
+        await _secureStorage.delete(key: Preferences.auth_token);
+      } finally {
+        await _preferences!.clear();
+      }
     }
   }
 
