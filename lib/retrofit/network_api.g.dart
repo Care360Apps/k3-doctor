@@ -700,61 +700,6 @@ class _RestClient implements RestClient {
   }
 
   @override
-  Future<PayoutAccountResponse> payoutAccountShow() async {
-    final _extra = <String, dynamic>{};
-    final queryParameters = <String, dynamic>{};
-    final _headers = <String, dynamic>{};
-    const Map<String, dynamic>? _data = null;
-    final _options = _setStreamType<PayoutAccountResponse>(
-      Options(method: 'GET', headers: _headers, extra: _extra)
-          .compose(
-            _dio.options,
-            'payout_account',
-            queryParameters: queryParameters,
-            data: _data,
-          )
-          .copyWith(baseUrl: _combineBaseUrls(_dio.options.baseUrl, baseUrl)),
-    );
-    final _result = await _dio.fetch<Map<String, dynamic>>(_options);
-    late PayoutAccountResponse _value;
-    try {
-      _value = PayoutAccountResponse.fromJson(_result.data!);
-    } on Object catch (e, s) {
-      errorLogger?.logError(e, s, _options, response: _result);
-      rethrow;
-    }
-    return _value;
-  }
-
-  @override
-  Future<PayoutAccountResponse> payoutAccountUpdate(
-      Map<String, dynamic> body) async {
-    final _extra = <String, dynamic>{};
-    final queryParameters = <String, dynamic>{};
-    final _headers = <String, dynamic>{};
-    final _data = body;
-    final _options = _setStreamType<PayoutAccountResponse>(
-      Options(method: 'POST', headers: _headers, extra: _extra)
-          .compose(
-            _dio.options,
-            'payout_account',
-            queryParameters: queryParameters,
-            data: _data,
-          )
-          .copyWith(baseUrl: _combineBaseUrls(_dio.options.baseUrl, baseUrl)),
-    );
-    final _result = await _dio.fetch<Map<String, dynamic>>(_options);
-    late PayoutAccountResponse _value;
-    try {
-      _value = PayoutAccountResponse.fromJson(_result.data!);
-    } on Object catch (e, s) {
-      errorLogger?.logError(e, s, _options, response: _result);
-      rethrow;
-    }
-    return _value;
-  }
-
-  @override
   Future<UpdateTiming> updateTimingRequest(dynamic body) async {
     final _extra = <String, dynamic>{};
     final queryParameters = <String, dynamic>{};
@@ -1043,7 +988,7 @@ class _RestClient implements RestClient {
           )
           .copyWith(baseUrl: _combineBaseUrls(_dio.options.baseUrl, baseUrl)),
     );
-    final _result = await _dio.fetch<Map<String, dynamic>>(_options);
+    final _result = await _dio.fetch<dynamic>(_options);
     late AccountDeleteModel _value;
     try {
       _value = AccountDeleteModel.fromJson(_result.data!);
@@ -1055,9 +1000,9 @@ class _RestClient implements RestClient {
   }
 
   @override
-  Future<DoctorNotesResponse> doctorNotes() async {
+  Future<DoctorNotesResponse> doctorNotes(int appointmentId) async {
     final _extra = <String, dynamic>{};
-    final queryParameters = <String, dynamic>{};
+    final queryParameters = <String, dynamic>{r'appointment_id': appointmentId};
     final _headers = <String, dynamic>{};
     const Map<String, dynamic>? _data = null;
     final _options = _setStreamType<DoctorNotesResponse>(
@@ -1083,11 +1028,13 @@ class _RestClient implements RestClient {
 
   @override
   Future<DoctorNotesResponse> createDoctorNote(
-      Map<String, dynamic> body) async {
+    Map<String, dynamic> body,
+  ) async {
     final _extra = <String, dynamic>{};
     final queryParameters = <String, dynamic>{};
     final _headers = <String, dynamic>{};
-    final _data = body;
+    final _data = <String, dynamic>{};
+    _data.addAll(body);
     final _options = _setStreamType<DoctorNotesResponse>(
       Options(method: 'POST', headers: _headers, extra: _extra)
           .compose(
@@ -1111,12 +1058,14 @@ class _RestClient implements RestClient {
 
   @override
   Future<DoctorNotesResponse> updateDoctorNote(
-      int id, Map<String, dynamic> body) async {
+    int id,
+    Map<String, dynamic> body,
+  ) async {
     final _extra = <String, dynamic>{};
     final queryParameters = <String, dynamic>{};
-    queryParameters.removeWhere((k, v) => v == null);
     final _headers = <String, dynamic>{};
-    final _data = body;
+    final _data = <String, dynamic>{};
+    _data.addAll(body);
     final _options = _setStreamType<DoctorNotesResponse>(
       Options(method: 'PUT', headers: _headers, extra: _extra)
           .compose(
@@ -1142,7 +1091,6 @@ class _RestClient implements RestClient {
   Future<DoctorNotesResponse> deleteDoctorNote(int id) async {
     final _extra = <String, dynamic>{};
     final queryParameters = <String, dynamic>{};
-    queryParameters.removeWhere((k, v) => v == null);
     final _headers = <String, dynamic>{};
     const Map<String, dynamic>? _data = null;
     final _options = _setStreamType<DoctorNotesResponse>(
@@ -1195,11 +1143,13 @@ class _RestClient implements RestClient {
 
   @override
   Future<WithdrawalRequestCreateResponse> withdrawalRequestCreateRequest(
-      Map<String, dynamic> body) async {
+    Map<String, dynamic> body,
+  ) async {
     final _extra = <String, dynamic>{};
     final queryParameters = <String, dynamic>{};
     final _headers = <String, dynamic>{};
-    final _data = body;
+    final _data = <String, dynamic>{};
+    _data.addAll(body);
     final _options = _setStreamType<WithdrawalRequestCreateResponse>(
       Options(method: 'POST', headers: _headers, extra: _extra)
           .compose(
@@ -1214,6 +1164,63 @@ class _RestClient implements RestClient {
     late WithdrawalRequestCreateResponse _value;
     try {
       _value = WithdrawalRequestCreateResponse.fromJson(_result.data!);
+    } on Object catch (e, s) {
+      errorLogger?.logError(e, s, _options, response: _result);
+      rethrow;
+    }
+    return _value;
+  }
+
+  @override
+  Future<PayoutAccountResponse> payoutAccountShow() async {
+    final _extra = <String, dynamic>{};
+    final queryParameters = <String, dynamic>{};
+    final _headers = <String, dynamic>{};
+    const Map<String, dynamic>? _data = null;
+    final _options = _setStreamType<PayoutAccountResponse>(
+      Options(method: 'GET', headers: _headers, extra: _extra)
+          .compose(
+            _dio.options,
+            'payout_account',
+            queryParameters: queryParameters,
+            data: _data,
+          )
+          .copyWith(baseUrl: _combineBaseUrls(_dio.options.baseUrl, baseUrl)),
+    );
+    final _result = await _dio.fetch<Map<String, dynamic>>(_options);
+    late PayoutAccountResponse _value;
+    try {
+      _value = PayoutAccountResponse.fromJson(_result.data!);
+    } on Object catch (e, s) {
+      errorLogger?.logError(e, s, _options, response: _result);
+      rethrow;
+    }
+    return _value;
+  }
+
+  @override
+  Future<PayoutAccountResponse> payoutAccountUpdate(
+    Map<String, dynamic> body,
+  ) async {
+    final _extra = <String, dynamic>{};
+    final queryParameters = <String, dynamic>{};
+    final _headers = <String, dynamic>{};
+    final _data = <String, dynamic>{};
+    _data.addAll(body);
+    final _options = _setStreamType<PayoutAccountResponse>(
+      Options(method: 'POST', headers: _headers, extra: _extra)
+          .compose(
+            _dio.options,
+            'payout_account',
+            queryParameters: queryParameters,
+            data: _data,
+          )
+          .copyWith(baseUrl: _combineBaseUrls(_dio.options.baseUrl, baseUrl)),
+    );
+    final _result = await _dio.fetch<Map<String, dynamic>>(_options);
+    late PayoutAccountResponse _value;
+    try {
+      _value = PayoutAccountResponse.fromJson(_result.data!);
     } on Object catch (e, s) {
       errorLogger?.logError(e, s, _options, response: _result);
       rethrow;

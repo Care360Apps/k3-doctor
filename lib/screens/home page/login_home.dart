@@ -1,3 +1,4 @@
+import '../../brand/care360_services_roadmap.dart';
 import 'dart:async';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -20,6 +21,10 @@ import 'package:doctro/retrofit/server_error.dart';
 import 'package:doctro/screens/home%20page/patient_information.dart';
 import 'package:doctro/screens/videoCall/PhoneScreen.dart';
 import 'package:doctro/screens/auth/SignIn.dart';
+import '../setting/professional_availability.dart';
+import '../../brand/care360_professional_quick_actions.dart';
+import '../../brand/care360_professional_role.dart';
+import '../appointment/doctor_practice_screen.dart';
 import 'package:doctro/screens/subscription/Subscription.dart';
 import 'package:doctro/screens/videoCall/video_Call.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -437,6 +442,16 @@ class _LoginHomeScreenState extends State<LoginHomeScreen> {
       onWillPop: onWillPop,
       child: Scaffold(
         key: _scaffoldKey,
+        floatingActionButton: FloatingActionButton.extended(
+          key: const Key('professional-availability-shortcut'),
+          backgroundColor: const Color(0xFF08785E),
+          foregroundColor: Colors.white,
+          icon: const Icon(Icons.location_on_outlined),
+          label: const Text('Nearby Care'),
+          onPressed: () => Navigator.of(context).push(MaterialPageRoute<void>(
+            builder: (_) => const ProfessionalAvailabilityScreen(),
+          )),
+        ),
         drawer: Drawer(
           child: Container(
             color: back,
@@ -663,6 +678,33 @@ class _LoginHomeScreenState extends State<LoginHomeScreen> {
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.center,
                                 children: [
+                                  if (Care360ProfessionalRole.canCreatePrescription(SharedPreferenceHelper.getString(Preferences.user_role)))
+                                    Card(margin: const EdgeInsets.all(16), child: ListTile(
+                                      leading: const Icon(Icons.local_hospital_outlined),
+                                      title: const Text('My medical practice'),
+                                      subtitle: const Text('Profile, schedule and clinical consultations'),
+                                      trailing: const Icon(Icons.chevron_right),
+                                      onTap: () => Navigator.push(context, MaterialPageRoute<void>(builder: (_) => const DoctorPracticeScreen())),
+                                    )),
+                                  Card(margin: const EdgeInsets.symmetric(horizontal: 16), child: ListTile(leading: const Icon(Icons.school_outlined), title: const Text('Professional services'), subtitle: const Text('Training & CPD, Workforce and organizations roadmap'), onTap: () => Navigator.push(context, MaterialPageRoute<void>(builder: (_) => const Care360ServicesRoadmap(professional: true))))),
+                                  Care360ProfessionalQuickActions(
+                                    onOpen: (destination) {
+                                      switch (destination) {
+                                        case Care360ProfessionalDestination.appointments:
+                                          Navigator.pushNamed(context, 'AppointmentHistoryScreen');
+                                          break;
+                                        case Care360ProfessionalDestination.schedule:
+                                          Navigator.pushNamed(context, 'Schedule Timings');
+                                          break;
+                                        case Care360ProfessionalDestination.notes:
+                                          Navigator.pushNamed(context, 'Notes');
+                                          break;
+                                        case Care360ProfessionalDestination.messages:
+                                          Navigator.pushNamed(context, 'ChatHome');
+                                          break;
+                                      }
+                                    },
+                                  ),
                                   isFilled == 0
                                       ? GestureDetector(
                                           onTap: () => Navigator.pushNamed(context, "profile"),
@@ -2056,7 +2098,8 @@ class _LoginHomeScreenState extends State<LoginHomeScreen> {
   }
 
   Future<void> logoutUser() async {
-    SharedPreferenceHelper.clearPref();
+    await SharedPreferenceHelper.clearPrefSecurely();
+    if (!mounted) return;
     Navigator.pushAndRemoveUntil(
       context,
       MaterialPageRoute(builder: (BuildContext context) => SignIn()),

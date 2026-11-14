@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 
-const _ink = Color(0xFF102B48);
-const _green = Color(0xFF137D66);
-const _paper = Color(0xFFF8FAF6);
+const _ink = Color(0xFF123E4D);
+const _green = Color(0xFF087D76);
+const _paper = Color(0xFFF5F8F7);
 const _carePhotos = [
   'assets/images/care360_family_care.webp',
   'assets/images/care360_appointments.webp',
@@ -23,8 +23,8 @@ class Care360Brand extends StatelessWidget {
   Widget build(BuildContext context) => Column(
     mainAxisSize: MainAxisSize.min,
     children: [
-      Image.asset('assets/images/care360_master_logo.webp', width: 60, height: 60,
-        semanticLabel: 'Care360, quality healthcare for all'),
+      ClipOval(child: Image.asset('assets/images/care360_master_logo.webp', width: 72, height: 72,
+        semanticLabel: 'Care360, quality healthcare for all')),
       Text(professional ? 'Care360 Plus' : 'Care360 Patient',
         style: const TextStyle(color: _ink, fontSize: 14, fontWeight: FontWeight.w700)),
     ],
@@ -49,7 +49,7 @@ class CnuAttribution extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Padding(
-    padding: const EdgeInsets.only(top: 20, bottom: 8),
+    padding: const EdgeInsets.only(top: 16, bottom: 8),
     child: Column(mainAxisSize: MainAxisSize.min, children: [
       const Text('A product of', style: TextStyle(color: Color(0xFF52636C), fontSize: 12)),
       Semantics(link: true, child: TextButton(
@@ -82,8 +82,8 @@ class _CarePhoto extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => ClipRRect(
-    borderRadius: BorderRadius.circular(26),
-    child: AspectRatio(aspectRatio: 1.6, child: Image.asset(
+    borderRadius: BorderRadius.circular(22),
+    child: AspectRatio(aspectRatio: 1.85, child: Image.asset(
       _carePhotos[photoIndex],
       fit: BoxFit.cover,
       semanticLabel: _carePhotoDescriptions[photoIndex],
@@ -116,7 +116,6 @@ class Care360AuthShell extends StatelessWidget {
               const SizedBox(height: 22),
               Container(width: double.infinity,
                 padding: const EdgeInsets.symmetric(vertical: 22),
-                decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(26)),
                 child: child),
               const CnuAttribution(),
             ]),
@@ -172,13 +171,13 @@ class _Care360WelcomeState extends State<Care360Welcome> {
                   Flexible(child: Care360Brand(professional: widget.professional)),
                   TextButton(onPressed: _finishing ? null : _finish, child: const Text('Skip')),
                 ]),
-                const SizedBox(height: 22),
+                const SizedBox(height: 18),
                 _CarePhoto(photoIndex: widget.professional ? [2, 1, 0][_page] : _page),
                 const SizedBox(height: 20),
                 const _LocalIdentity(),
-                const SizedBox(height: 20),
+                const SizedBox(height: 17),
                 Semantics(liveRegion: true, child: Text(titles[_page], textAlign: TextAlign.center,
-                  style: const TextStyle(fontSize: 30, height: 1.15, color: _ink, fontWeight: FontWeight.w800))),
+                  style: const TextStyle(fontSize: 27, height: 1.16, color: _ink, fontWeight: FontWeight.w800))),
                 const SizedBox(height: 12),
                 Text(descriptions[_page], textAlign: TextAlign.center,
                   style: const TextStyle(fontSize: 16, height: 1.5, color: Color(0xFF52636C))),
@@ -193,11 +192,14 @@ class _Care360WelcomeState extends State<Care360Welcome> {
                 )),
                 const SizedBox(height: 24),
                 SizedBox(width: double.infinity, child: FilledButton(
+                  key: Key('care360-onboarding-step-${_page + 1}'),
                   onPressed: _finishing ? null : () {
                     if (_page < 2) { setState(() => _page++); } else { _finish(); }
                   },
                   style: FilledButton.styleFrom(backgroundColor: _green,
-                    padding: const EdgeInsets.symmetric(vertical: 17)),
+                    foregroundColor: Colors.white,
+                    minimumSize: const Size.fromHeight(52),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(13))),
                   child: Text(_page == 2 ? 'Get started' : 'Continue', style: const TextStyle(fontSize: 16)),
                 )),
               ]),
