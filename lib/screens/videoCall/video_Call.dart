@@ -533,7 +533,7 @@ class _VideoCallState extends State<VideoCall> {
     final engine = _engine;
     if (engine == null) return const SizedBox.shrink();
     if (mutedVideo) {
-      return const Center(
+      return Center(
         child: Semantics(
           label: 'Your camera is off. Audio-only consultation is active.',
           child: Icon(Icons.mic, size: 36),

@@ -23,8 +23,8 @@ class Care360Brand extends StatelessWidget {
   Widget build(BuildContext context) => Column(
     mainAxisSize: MainAxisSize.min,
     children: [
-      Image.asset('assets/images/care360_master_logo.webp', width: 60, height: 60,
-        semanticLabel: 'Care360, quality healthcare for all'),
+      ClipOval(child: Image.asset('assets/images/care360_master_logo.webp', width: 72, height: 72,
+        semanticLabel: 'Care360, quality healthcare for all')),
       Text(professional ? 'Care360 Plus' : 'Care360 Patient',
         style: const TextStyle(color: _ink, fontSize: 14, fontWeight: FontWeight.w700)),
     ],
@@ -116,16 +116,6 @@ class Care360AuthShell extends StatelessWidget {
               const SizedBox(height: 22),
               Container(width: double.infinity,
                 padding: const EdgeInsets.symmetric(vertical: 22),
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(22),
-                  border: Border.all(color: const Color(0xFFE3ECE9)),
-                  boxShadow: const [BoxShadow(
-                    color: Color(0x0D123E4D),
-                    blurRadius: 22,
-                    offset: Offset(0, 8),
-                  )],
-                ),
                 child: child),
               const CnuAttribution(),
             ]),

@@ -1,3 +1,4 @@
+import 'profile_date.dart';
 import 'dart:convert';
 import 'dart:core';
 import 'dart:io';
@@ -72,7 +73,6 @@ class _ProfileScreen extends State<ProfileScreen> {
   DateTime? _selectedDate;
   String newDateApiPass = "";
   String? showFormat = '';
-  var temp;
   List<String> selectedHospitals = [];
 
   //Set Stepper
@@ -245,7 +245,7 @@ class _ProfileScreen extends State<ProfileScreen> {
                                       ),
                                     ),
                                     placeholder: (context, url) => CircularProgressIndicator(color: loginButton),
-                                    errorWidget: (context, url, error) => Image.asset("images/no_image.png"),
+                                    errorWidget: (context, url, error) => const CircleAvatar(child: Icon(Icons.person_outline)),
                                   ),
                                 ),
                           Positioned(
@@ -1687,13 +1687,6 @@ class _ProfileScreen extends State<ProfileScreen> {
     var eEducationList = JsonEncoder().convert(educationList);
     var cCertificateList = JsonEncoder().convert(certificateList);
 
-    //pass date formate
-    if (_selectedDate != null) {
-      temp = '$_selectedDate';
-    } else {
-      temp = '$showFormat';
-    }
-
     String hospitalIds = '';
     List<String> data = [];
     for (int i = 0; i < hospitalReq.length; i++) {
@@ -1715,7 +1708,12 @@ class _ProfileScreen extends State<ProfileScreen> {
       hospitalIds = result + " ";
     }
 
-    newDateApiPass = DateUtilForPass().formattedDate(DateTime.parse('$temp'));
+    final birthDate = _selectedDate ?? Care360ProfileDate.parse(showFormat);
+    if (birthDate == null) {
+      Fluttertoast.showToast(msg: 'Select your date of birth before continuing.');
+      return BaseModel<UpdateProfile>();
+    }
+    newDateApiPass = DateUtilForPass().formattedDate(birthDate);
     Map<String, dynamic> body = {
       "name": _pName.text,
       "treatment_id": _valueTreatment?.id,
@@ -1775,10 +1773,12 @@ class _ProfileScreen extends State<ProfileScreen> {
       }
       _pName.text = response.data!.name!;
       showFormat = response.data!.dob;
-      newDateApiPass = DateUtil().formattedDate(DateTime.parse('$showFormat'));
+      final birthDate = Care360ProfileDate.parse(showFormat);
+      _selectedDate = birthDate;
+      newDateApiPass = birthDate == null ? '' : DateUtil().formattedDate(birthDate);
       _pDob.text = newDateApiPass;
 
-      _genderSelect = response.data!.gender!;
+      _genderSelect = response.data!.gender;
 
       if (convertDegree != null) {
         for (int i = 0; i < convertDegree.length; i++) {
@@ -1841,10 +1841,10 @@ class _ProfileScreen extends State<ProfileScreen> {
         _pLng.text = response.data!.lng.toString();
       }
 
-      _pTimeSlot.text = response.data!.timeslot!;
-      _pStartTime.text = response.data!.startTime!;
-      _pEndTime.text = response.data!.endTime!;
-      _pBasedOn.text = response.data!.basedOn!;
+      _pTimeSlot.text = response.data!.timeslot ?? '';
+      _pStartTime.text = response.data!.startTime ?? '';
+      _pEndTime.text = response.data!.endTime ?? '';
+      _pBasedOn.text = response.data!.basedOn ?? '';
 
       _selectedPopular = response.data!.isPopular.toString();
       _offersVideoCall = (response.data!.offersVideoCall ?? (_isProvider ? 0 : 1)) != 0;

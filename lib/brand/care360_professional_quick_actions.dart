@@ -111,7 +111,7 @@ class Care360ProfessionalQuickActions extends StatelessWidget {
           const SizedBox(height: 11),
           LayoutBuilder(builder: (context, size) {
             final columns = size.maxWidth >= 600 ? 4 : 2;
-            final height = 98.0 + (textScale > 1 ? (textScale - 1) * 30 : 0);
+            final height = 70.0 + textScale * 40.0;
             return GridView.builder(
               key: const Key('care360-plus-quick-actions'),
               shrinkWrap: true,

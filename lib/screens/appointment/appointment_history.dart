@@ -25,6 +25,7 @@ class AppointmentHistoryScreen extends StatefulWidget {
 class _AppointmentHistoryScreen extends State<AppointmentHistoryScreen>
     with TickerProviderStateMixin {
   Future? appointment;
+  bool _historyLoadFailed = false;
   final _scaffoldKey = GlobalKey<ScaffoldState>();
 
   List<PastAppointment> pastAppointmentReq = [];
@@ -89,7 +90,8 @@ class _AppointmentHistoryScreen extends State<AppointmentHistoryScreen>
   @override
   void initState() {
     super.initState();
-    Future.delayed(Duration.zero, () {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
       tabList.add(Tab(
         child: Text(
           getTranslated(context, AppString.upcoming_appointment).toString(),
@@ -117,7 +119,9 @@ class _AppointmentHistoryScreen extends State<AppointmentHistoryScreen>
         });
       });
 
-      appointment = appointmentHistoryScreen();
+      setState(() {
+        appointment = appointmentHistoryScreen();
+      });
       dName = SharedPreferenceHelper.getString(Preferences.name);
       dFullImage = SharedPreferenceHelper.getString(Preferences.image);
       phone = SharedPreferenceHelper.getString(Preferences.phone_no);
@@ -128,7 +132,8 @@ class _AppointmentHistoryScreen extends State<AppointmentHistoryScreen>
 
   @override
   void dispose() {
-    _tabController!.dispose();
+    _tabController?.dispose();
+    _search.dispose();
     super.dispose();
   }
 
@@ -965,10 +970,21 @@ class _AppointmentHistoryScreen extends State<AppointmentHistoryScreen>
                 },
                 child: RefreshIndicator(
                   color: loginButton,
-                  onRefresh: appointmentHistoryScreen,
+                  onRefresh: _reloadHistory,
                   child: FutureBuilder(
                       future: appointment,
                       builder: (context, snapshot) {
+                        if (snapshot.connectionState == ConnectionState.done && _historyLoadFailed) {
+                          return Center(
+                            child: Column(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                const Text('Unable to load appointment history. Please try again.'),
+                                TextButton(onPressed: _reloadHistory, child: const Text('Retry')),
+                              ],
+                            ),
+                          );
+                        }
                         if (snapshot.connectionState == ConnectionState.done) {
                         return Column(
                                     children: [
@@ -1037,25 +1053,33 @@ class _AppointmentHistoryScreen extends State<AppointmentHistoryScreen>
     );
   }
 
+  Future<void> _reloadHistory() async {
+    if (!mounted) return;
+    final request = appointmentHistoryScreen();
+    setState(() { appointment = request; });
+    await request;
+  }
+
   Future<BaseModel<AppointmentHistory>> appointmentHistoryScreen() async {
     AppointmentHistory response;
     try {
-      pastAppointmentReq.clear();
-      upcomingAppointmentReq.clear();
-      _pastData.clear();
-      _userDetails.clear();
       response = await RestClient(RetroApi().dioData())
           .appointmentHistoryScreenRequest();
       if (mounted) {
       setState(() {
-        pastAppointmentReq.addAll(response.data!.pastAppointment!);
-        upcomingAppointmentReq.addAll(response.data!.upcomingAppointment!);
-        _userDetails.addAll(response.data!.upcomingAppointment!);
-        _pastData.addAll(response.data!.pastAppointment!);
+        _historyLoadFailed = false;
+        pastAppointmentReq = List.of(response.data?.pastAppointment ?? []);
+        upcomingAppointmentReq = List.of(response.data?.upcomingAppointment ?? []);
+        _userDetails = List.of(upcomingAppointmentReq);
+        _pastData = List.of(pastAppointmentReq);
+        _searchResult.clear();
+        _pastSearch.clear();
+        _search.clear();
       });
       }
-    } catch (error, stacktrace) {
-      print("Exception occur: $error stackTrace: $stacktrace");
+    } catch (error) {
+      // Transport errors can contain patient data or authorization headers.
+      if (mounted) setState(() { _historyLoadFailed = true; });
       return BaseModel()..setException(ServerError.withError(error: error));
     }
     return BaseModel()..data = response;

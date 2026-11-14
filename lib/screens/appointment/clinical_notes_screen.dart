@@ -10,9 +10,11 @@ import '../../brand/care360_professional_section_intro.dart';
 /// Private, appointment-scoped notes for an approved doctor.
 /// Backend permission checks always decide access; this screen is not a gate.
 class ClinicalNotesScreen extends StatefulWidget {
-  const ClinicalNotesScreen({super.key, required this.appointmentId});
+  const ClinicalNotesScreen({super.key, required this.appointmentId, this.patientName, this.appointmentReference});
 
   final int appointmentId;
+  final String? patientName;
+  final String? appointmentReference;
 
   @override
   State<ClinicalNotesScreen> createState() => _ClinicalNotesScreenState();
@@ -83,6 +85,25 @@ class _ClinicalNotesScreenState extends State<ClinicalNotesScreen> {
     });
   }
 
+  void _read(DoctorNote note) {
+    showDialog<void>(context: context, builder: (_) => AlertDialog(
+      scrollable: true,
+      title: Text(note.title ?? 'Clinical note'),
+      content: Care360ClinicalNoteReader(note: note),
+      actions: [TextButton(onPressed: () => Navigator.pop(context), child: const Text('Close'))],
+    ));
+  }
+
+  void _outline(String type) {
+    if (_body.text.trim().isNotEmpty || _title.text.trim().isNotEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+        content: Text('Start a new empty note to insert an outline. Your draft was kept.')));
+      return;
+    }
+    _title.text = type;
+    _body.text = care360ClinicalOutlines[type] ?? '';
+  }
+
   Future<void> _save({required bool finalize}) async {
     if (_saving || !mounted) return;
     if (!_hasDoctorAccess || widget.appointmentId <= 0 ||
@@ -98,6 +119,11 @@ class _ClinicalNotesScreenState extends State<ClinicalNotesScreen> {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Enter a title and clinical note before saving.')),
       );
+      return;
+    }
+    if (finalize && care360ClinicalOutlines.values.any((outline) => outline.trim() == body)) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+        content: Text('Complete the clinical findings and plan before finalizing the outline.')));
       return;
     }
     if (finalize) {
@@ -191,6 +217,10 @@ class _ClinicalNotesScreenState extends State<ClinicalNotesScreen> {
                 description: 'Appointment-scoped notes and care plans',
                 icon: Icons.lock_person_outlined,
               ),
+              if ((widget.patientName ?? '').trim().isNotEmpty)
+                Text('Patient: ${widget.patientName}', style: theme.textTheme.titleMedium),
+              Text('Appointment: ${widget.appointmentReference ?? widget.appointmentId}'),
+              const SizedBox(height: 12),
               Text('Encounter notes', style: theme.textTheme.titleLarge),
               const SizedBox(height: 6),
               Text(
@@ -212,14 +242,14 @@ class _ClinicalNotesScreenState extends State<ClinicalNotesScreen> {
                     title: Text(note.title ?? 'Untitled'),
                     subtitle: Text(
                       '${note.status == 'final' ? 'Finalized' : 'Draft'}'
-                      ' • ${note.createdAt ?? 'Date unavailable'}',
+                      ' â€¢ ${note.createdAt ?? 'Date unavailable'}',
                     ),
                     leading: Icon(note.status == 'final'
                         ? Icons.verified_user_outlined : Icons.edit_note),
                     trailing: note.status == 'final'
                         ? const Icon(Icons.lock_outline)
                         : const Icon(Icons.chevron_right),
-                    onTap: note.status == 'final' ? null : () => _edit(note),
+                    onTap: () => note.status == 'final' ? _read(note) : _edit(note),
                   ),
                 ),
               ],
@@ -244,6 +274,16 @@ class _ClinicalNotesScreenState extends State<ClinicalNotesScreen> {
                 ],
               ),
               const SizedBox(height: 10),
+              PopupMenuButton<String>(
+                tooltip: 'Insert a blank clinical outline',
+                enabled: !_saving,
+                onSelected: _outline,
+                itemBuilder: (_) => care360ClinicalOutlines.keys.map((name) =>
+                  PopupMenuItem<String>(value: name, child: Text(name))).toList(),
+                child: const Padding(padding: EdgeInsets.symmetric(vertical: 12),
+                  child: Row(children: [Icon(Icons.note_add_outlined), SizedBox(width: 8),
+                    Flexible(child: Text('Start with a clinical outline'))])),
+              ),
               TextField(
                 controller: _title,
                 maxLength: 160,
@@ -269,7 +309,7 @@ class _ClinicalNotesScreenState extends State<ClinicalNotesScreen> {
               FilledButton.icon(
                 onPressed: _saving ? null : () => _save(finalize: false),
                 icon: const Icon(Icons.save_outlined),
-                label: Text(_saving ? 'Saving…' : 'Save draft'),
+                label: Text(_saving ? 'Savingâ€¦' : 'Save draft'),
               ),
               const SizedBox(height: 8),
               OutlinedButton.icon(
@@ -283,4 +323,35 @@ class _ClinicalNotesScreenState extends State<ClinicalNotesScreen> {
       ),
     );
   }
+}
+
+
+// Documentation headings only. No findings, diagnoses or treatment are inferred.
+const care360ClinicalOutlines = <String, String>{
+  'Consultation note': 'Presenting concern:\n\nHistory and current medicines:\n\nAllergies (record status explicitly):\n\nExamination and vitals:\n\nAssessment / diagnosis:\n\nInvestigations requested:\n\nCare plan and patient instructions:\n\nFollow-up and safety-net advice:\n',
+  'SOAP note': 'Subjective (patient history):\n\nObjective (observations / examination):\n\nAssessment:\n\nPlan and follow-up:\n',
+  'Follow-up note': 'Reason for follow-up:\n\nChanges since previous consultation:\n\nResults reviewed:\n\nAssessment:\n\nUpdated plan and next review:\n',
+  'Referral note': 'Reason for referral:\n\nRelevant history and examination:\n\nCurrent medicines and allergies:\n\nInvestigations / results:\n\nReceiving service and urgency:\n\nInformation shared and patient consent:\n',
+};
+
+class Care360ClinicalNoteReader extends StatelessWidget {
+  const Care360ClinicalNoteReader({super.key, required this.note});
+  final DoctorNote note;
+  @override
+  Widget build(BuildContext context) => Column(
+    crossAxisAlignment: CrossAxisAlignment.start, mainAxisSize: MainAxisSize.min,
+    children: [
+      Text('Appointment #${note.appointmentId ?? "Unavailable"}'),
+      const SizedBox(height: 8),
+      Text(note.status == 'final' ? 'Finalized — read only' : 'Draft'),
+      if (note.finalizedAt != null) Text('Finalized: ${note.finalizedAt}'),
+      const Divider(height: 24),
+      SelectableText(note.body ?? 'Note content is unavailable. Refresh and try again.'),
+      if (note.status == 'final') ...[
+        const SizedBox(height: 16),
+        const Text('Record corrections as a new, clearly referenced addendum. '
+          'The original finalized note is retained.'),
+      ],
+    ],
+  );
 }

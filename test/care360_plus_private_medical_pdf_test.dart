@@ -197,7 +197,7 @@ void main() {
     expect(screen, contains('Care360MedicalPdfClient('));
     expect(screen, contains('Care360ProtectedPdfViewer('));
     expect(screen, contains('SharedPreferenceHelper.getString(Preferences.auth_token)'));
-    expect(screen, contains('onPressed: _openProtectedPrescription'));
+    expect(RegExp(r'onPressed\s*:\s*_openProtectedPrescription\b').hasMatch(screen), isTrue);
     expect(screen, isNot(contains('launchUrl(Uri.parse("\$pdf"))')));
     expect(viewer, contains('SfPdfViewer.memory('));
     expect(viewer, isNot(contains('launchUrl(')));

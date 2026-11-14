@@ -1,4 +1,4 @@
-import 'dart:collection';
+import '../appointment/clinical_workspace_screen.dart';
 import 'dart:convert';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -21,12 +21,10 @@ import 'package:doctro/security/care360_medical_pdf_client.dart';
 import 'package:doctro/security/care360_protected_pdf_viewer.dart';
 import 'package:doctro/retrofit/server_error.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:flutter_svg/svg.dart';
 import 'package:fluttertoast/fluttertoast.dart';
 import 'package:full_screen_image_null_safe/full_screen_image_null_safe.dart';
 import 'package:intl/intl.dart';
-import 'package:dropdown_plus/dropdown_plus.dart';
 import 'package:provider/provider.dart';
 import 'package:url_launcher/url_launcher.dart';
 
@@ -37,6 +35,7 @@ import '../../chat/pages/chat_page.dart';
 import '../../chat/providers/auth_provider.dart' as chatAuth;
 import '../videoCall/video_Call.dart';
 import '../appointment/clinical_notes_screen.dart';
+import '../appointment/medicine_entry_dialog.dart';
 
 class patientDetailsScreen extends StatefulWidget {
   final int? id;
@@ -47,10 +46,10 @@ class patientDetailsScreen extends StatefulWidget {
   _patientDetailsScreenState createState() => _patientDetailsScreenState();
 }
 
-class _patientDetailsScreenState extends State<patientDetailsScreen> with TickerProviderStateMixin {
+class _patientDetailsScreenState extends State<patientDetailsScreen>
+    with TickerProviderStateMixin {
   // Prescription drafts and medicine options belong to this appointment's
   // State. They must never leak between two patient detail screens.
-  final List<Map<String, dynamic>> medicineData = [];
   final List<Map<String, dynamic>> listOfMedicine = [];
   final List<String> medicineReq = [];
   bool get _canPrescribe => Care360ProfessionalRole.canCreatePrescription(
@@ -59,14 +58,7 @@ class _patientDetailsScreenState extends State<patientDetailsScreen> with Ticker
   //Set Loader
   Future? appointmentDetail;
 
-  //Pdf Pass Data
-  String? valueDays;
-  bool? alertValueFirst = false;
-  bool? alertValueSecond = false;
-  bool? alertValueThird = false;
-
-  //alert dialog validation
-  final GlobalKey<FormState> _formKey = GlobalKey<FormState>();
+  bool _prescriptionSaving = false;
 
   //set high/width using mediaQuery
   double? width;
@@ -77,10 +69,6 @@ class _patientDetailsScreenState extends State<patientDetailsScreen> with Ticker
 
   //set hide show approve and cancel button
   bool hideButton = true;
-
-  //Add Medicine Data dialog
-  TextEditingController _days = TextEditingController();
-  String? selectedMedicineValue;
 
   //Show Signal Appointment Details
   int? id;
@@ -111,7 +99,10 @@ class _patientDetailsScreenState extends State<patientDetailsScreen> with Ticker
     super.initState();
     homeProvider = Provider.of(context, listen: false);
     // Ensure Firebase Auth is active so the Firestore stream doesn't get permission-denied.
-    Provider.of<chatAuth.AuthProvider>(context, listen: false).ensureFirebaseUser();
+    Provider.of<chatAuth.AuthProvider>(
+      context,
+      listen: false,
+    ).ensureFirebaseUser();
     id = widget.id;
     appointmentDetail = appointmentDetails();
     allMedicinesRequest();
@@ -119,10 +110,53 @@ class _patientDetailsScreenState extends State<patientDetailsScreen> with Ticker
 
   Map<String, String> body = {};
 
-  @override
-  void dispose() {
-    _days.dispose();
-    super.dispose();
+  Future<void> _savePrescription() async {
+    if (_prescriptionSaving || !_canPrescribe) return;
+    if (listOfMedicine.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Add at least one medicine.')),
+      );
+      return;
+    }
+    setState(() => _prescriptionSaving = true);
+    try {
+      final confirmed = await reviewCare360Prescription(
+        context,
+        patientName: name ?? '',
+        appointmentReference: appointmentId ?? '${widget.id}',
+        medicines: listOfMedicine,
+      );
+      if (!confirmed || !mounted) return;
+      final rows = listOfMedicine
+          .map(
+            (medicine) => <String, dynamic>{
+              'medicine': medicine['name'],
+              'days': medicine['day'],
+              'morning': medicine['morning'] == true ? 1 : 0,
+              'afternoon': medicine['afternoon'] == true ? 1 : 0,
+              'night': medicine['night'] == true ? 1 : 0,
+            },
+          )
+          .toList();
+      final uploaded = await reportView(
+        context,
+        rows,
+        id,
+        userId,
+        jsonEncode(rows),
+      );
+      if (uploaded && mounted) {
+        setState(() {
+          listOfMedicine.clear();
+          appointmentDetail = appointmentDetails();
+        });
+        Fluttertoast.showToast(
+          msg: getTranslated(context, AppString.pdf_generated).toString(),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _prescriptionSaving = false);
+    }
   }
 
   Future<void> _openProtectedPrescription() async {
@@ -140,18 +174,21 @@ class _patientDetailsScreenState extends State<patientDetailsScreen> with Ticker
       apiBase: Uri.parse(Apis.baseUrl),
       readToken: () async =>
           SharedPreferenceHelper.getString(Preferences.auth_token),
-      allowLoopbackHttp:
-          const bool.fromEnvironment('K3_ALLOW_LOCAL_CLINICAL_HTTP'),
+      allowLoopbackHttp: const bool.fromEnvironment(
+        'K3_ALLOW_LOCAL_CLINICAL_HTTP',
+      ),
     );
     try {
-      await Navigator.of(context).push(MaterialPageRoute(
-        builder: (_) => Care360ProtectedPdfViewer(
-          loadPdf: () => client.fetchForAppointment(
-            appointmentId,
-            serverPdfUrl: serverPdfUrl,
+      await Navigator.of(context).push(
+        MaterialPageRoute(
+          builder: (_) => Care360ProtectedPdfViewer(
+            loadPdf: () => client.fetchForAppointment(
+              appointmentId,
+              serverPdfUrl: serverPdfUrl,
+            ),
           ),
         ),
-      ));
+      );
     } finally {
       client.close();
     }
@@ -165,6 +202,7 @@ class _patientDetailsScreenState extends State<patientDetailsScreen> with Ticker
     Color colorWithOpacity(Color color, double opacity) {
       return color.withValues(alpha: opacity);
     }
+
     String safeText(String? value) {
       final trimmed = value?.trim() ?? '';
       return trimmed.isEmpty ? '-' : trimmed;
@@ -194,7 +232,12 @@ class _patientDetailsScreenState extends State<patientDetailsScreen> with Ticker
 
     Widget sectionCard({required Widget child, EdgeInsets? margin}) {
       return Container(
-        margin: margin ?? EdgeInsets.symmetric(horizontal: width! * 0.06, vertical: height * 0.008),
+        margin:
+            margin ??
+            EdgeInsets.symmetric(
+              horizontal: width! * 0.06,
+              vertical: height * 0.008,
+            ),
         padding: EdgeInsets.all(14),
         decoration: BoxDecoration(
           color: colorWhite,
@@ -212,7 +255,12 @@ class _patientDetailsScreenState extends State<patientDetailsScreen> with Ticker
       );
     }
 
-    Widget infoRow({required IconData icon, required String title, required String value, int maxLines = 2}) {
+    Widget infoRow({
+      required IconData icon,
+      required String title,
+      required String value,
+      int maxLines = 2,
+    }) {
       return Row(
         mainAxisSize: MainAxisSize.min,
         mainAxisAlignment: MainAxisAlignment.start,
@@ -236,14 +284,22 @@ class _patientDetailsScreenState extends State<patientDetailsScreen> with Ticker
               children: [
                 Text(
                   title,
-                  style: TextStyle(fontSize: 13, color: passwordVisibility, fontWeight: FontWeight.w600),
+                  style: TextStyle(
+                    fontSize: 13,
+                    color: passwordVisibility,
+                    fontWeight: FontWeight.w600,
+                  ),
                 ),
                 SizedBox(height: 4),
                 Text(
                   safeText(value),
                   maxLines: maxLines,
                   overflow: TextOverflow.ellipsis,
-                  style: TextStyle(fontSize: 16, color: hintColor, fontWeight: FontWeight.w600),
+                  style: TextStyle(
+                    fontSize: 16,
+                    color: hintColor,
+                    fontWeight: FontWeight.w600,
+                  ),
                 ),
               ],
             ),
@@ -270,7 +326,11 @@ class _patientDetailsScreenState extends State<patientDetailsScreen> with Ticker
             fit: FlexFit.loose,
             child: Text(
               title,
-              style: TextStyle(fontSize: 16, color: hintColor, fontWeight: FontWeight.w600),
+              style: TextStyle(
+                fontSize: 16,
+                color: hintColor,
+                fontWeight: FontWeight.w600,
+              ),
               overflow: TextOverflow.ellipsis,
             ),
           ),
@@ -289,7 +349,11 @@ class _patientDetailsScreenState extends State<patientDetailsScreen> with Ticker
         ),
         child: Text(
           safeText(text),
-          style: TextStyle(fontSize: 14.5, color: passwordVisibility, height: 1.4),
+          style: TextStyle(
+            fontSize: 14.5,
+            color: passwordVisibility,
+            height: 1.4,
+          ),
         ),
       );
     }
@@ -298,12 +362,11 @@ class _patientDetailsScreenState extends State<patientDetailsScreen> with Ticker
       Tab(
         text: getTranslated(context, AppString.patient_information).toString(),
       ),
+      Tab(text: getTranslated(context, AppString.patient_illness).toString()),
       Tab(
-        text: getTranslated(context, AppString.patient_illness).toString(),
-      ),
-      Tab(
-        text: _canPrescribe ? getTranslated(context, AppString.doctor_prescription).toString()
-          : 'Prescriptions (doctor only)',
+        text: _canPrescribe
+            ? getTranslated(context, AppString.doctor_prescription).toString()
+            : 'Prescriptions (doctor only)',
       ),
     ];
 
@@ -313,54 +376,65 @@ class _patientDetailsScreenState extends State<patientDetailsScreen> with Ticker
         child: SafeArea(
           top: true,
           child: Container(
-              margin: EdgeInsets.zero,
-              color: Colors.transparent,
-              child: Align(
-                alignment: Alignment.centerRight,
-                child: Container(
-                  margin: EdgeInsets.only(right: width! * 0.04),
-                  decoration: BoxDecoration(
-                    color: colorWhite,
-                    borderRadius: BorderRadius.circular(12),
-                    boxShadow: [
-                      BoxShadow(
-                        color: colorWithOpacity(black, 0.08),
-                        blurRadius: 10,
-                        offset: Offset(0, 4),
-                      ),
-                    ],
-                  ),
-                  child: InkWell(
-                    borderRadius: BorderRadius.circular(12),
-                    child: Padding(
-                      padding: EdgeInsets.all(8),
-                      child: Icon(Icons.arrow_back_ios, size: 18, color: hintColor),
+            margin: EdgeInsets.zero,
+            color: Colors.transparent,
+            child: Align(
+              alignment: Alignment.centerRight,
+              child: Container(
+                margin: EdgeInsets.only(right: width! * 0.04),
+                decoration: BoxDecoration(
+                  color: colorWhite,
+                  borderRadius: BorderRadius.circular(12),
+                  boxShadow: [
+                    BoxShadow(
+                      color: colorWithOpacity(black, 0.08),
+                      blurRadius: 10,
+                      offset: Offset(0, 4),
                     ),
-                    onTap: () {
-                      Navigator.pop(context);
-                    },
-                  ),
+                  ],
                 ),
-              )),
+                child: InkWell(
+                  borderRadius: BorderRadius.circular(12),
+                  child: Padding(
+                    padding: EdgeInsets.all(8),
+                    child: Icon(
+                      Icons.arrow_back_ios,
+                      size: 18,
+                      color: hintColor,
+                    ),
+                  ),
+                  onTap: () {
+                    Navigator.pop(context);
+                  },
+                ),
+              ),
+            ),
+          ),
         ),
       ),
       body: DefaultTabController(
         length: tabs.length,
         child: FutureBuilder(
-            future: appointmentDetail,
-            builder: (context, snapshot) {
-              if (snapshot.connectionState == ConnectionState.done) {
-                return SingleChildScrollView(
-                  child: GestureDetector(
-                    behavior: HitTestBehavior.opaque,
-                    onTap: () {
-                      FocusScope.of(context).requestFocus(new FocusNode());
-                    },
-                    child: Column(
-                      children: [
+          future: appointmentDetail,
+          builder: (context, snapshot) {
+            if (snapshot.connectionState == ConnectionState.done) {
+              return SingleChildScrollView(
+                child: GestureDetector(
+                  behavior: HitTestBehavior.opaque,
+                  onTap: () {
+                    FocusScope.of(context).requestFocus(new FocusNode());
+                  },
+                  child: Column(
+                    children: [
                       Container(
-                        margin: EdgeInsets.symmetric(horizontal: width! * 0.06, vertical: height * 0.01),
-                        padding: EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+                        margin: EdgeInsets.symmetric(
+                          horizontal: width! * 0.06,
+                          vertical: height * 0.01,
+                        ),
+                        padding: EdgeInsets.symmetric(
+                          horizontal: 16,
+                          vertical: 16,
+                        ),
                         decoration: BoxDecoration(
                           color: colorWhite,
                           borderRadius: BorderRadius.circular(20),
@@ -388,36 +462,66 @@ class _patientDetailsScreenState extends State<patientDetailsScreen> with Ticker
                                             child: new Wrap(
                                               children: <Widget>[
                                                 new ListTile(
-                                                  leading: new Icon(Icons.phone_in_talk),
+                                                  leading: new Icon(
+                                                    Icons.phone_in_talk,
+                                                  ),
                                                   title: new Text(
-                                                    getTranslated(context, "call_text").toString(),
+                                                    getTranslated(
+                                                      context,
+                                                      "call_text",
+                                                    ).toString(),
                                                   ),
                                                   onTap: () {
-                                                    if (SharedPreferenceHelper.getBoolean(Preferences.is_logged_in) == true) {
-                                                      Navigator.of(context).pop();
-                                                      launchUrl(Uri.parse("tel:$phoneNo"));
+                                                    if (SharedPreferenceHelper.getBoolean(
+                                                          Preferences
+                                                              .is_logged_in,
+                                                        ) ==
+                                                        true) {
+                                                      Navigator.of(
+                                                        context,
+                                                      ).pop();
+                                                      launchUrl(
+                                                        Uri.parse(
+                                                          "tel:$phoneNo",
+                                                        ),
+                                                      );
                                                     } else {
-                                                      Navigator.of(context).pop();
+                                                      Navigator.of(
+                                                        context,
+                                                      ).pop();
                                                     }
                                                   },
                                                 ),
                                                 if (visitType != 'home_visit')
                                                   new ListTile(
-                                                    leading: new Icon(Icons.videocam),
+                                                    leading: new Icon(
+                                                      Icons.videocam,
+                                                    ),
                                                     title: new Text(
-                                                      getTranslated(context, "video_call").toString(),
+                                                      getTranslated(
+                                                        context,
+                                                        "video_call",
+                                                      ).toString(),
                                                     ),
                                                     onTap: () {
-                                                      setState(
-                                                        () {
-                                                          if (SharedPreferenceHelper.getBoolean(Preferences.is_logged_in) == true) {
-                                                            Navigator.of(context).pop();
-                                                            _addVideoOverlay(context);
-                                                          } else {
-                                                            Navigator.of(context).pop();
-                                                          }
-                                                        },
-                                                      );
+                                                      setState(() {
+                                                        if (SharedPreferenceHelper.getBoolean(
+                                                              Preferences
+                                                                  .is_logged_in,
+                                                            ) ==
+                                                            true) {
+                                                          Navigator.of(
+                                                            context,
+                                                          ).pop();
+                                                          _addVideoOverlay(
+                                                            context,
+                                                          );
+                                                        } else {
+                                                          Navigator.of(
+                                                            context,
+                                                          ).pop();
+                                                        }
+                                                      });
                                                     },
                                                   ),
                                               ],
@@ -431,7 +535,10 @@ class _patientDetailsScreenState extends State<patientDetailsScreen> with Ticker
                                     height: 42,
                                     width: 42,
                                     decoration: BoxDecoration(
-                                      color: colorWithOpacity(loginButton, 0.12),
+                                      color: colorWithOpacity(
+                                        loginButton,
+                                        0.12,
+                                      ),
                                       borderRadius: BorderRadius.circular(14),
                                     ),
                                     child: Center(
@@ -442,51 +549,70 @@ class _patientDetailsScreenState extends State<patientDetailsScreen> with Ticker
                                     ),
                                   ),
                                 ),
-                                if (patientAddress != null && patientAddress!.trim().isNotEmpty)
+                                if (patientAddress != null &&
+                                    patientAddress!.trim().isNotEmpty)
                                   GestureDetector(
                                     onTap: () {
-                                      final encoded = Uri.encodeComponent(patientAddress!);
-                                      final uri = Uri.parse('https://www.google.com/maps/search/?api=1&query=$encoded');
+                                      final encoded = Uri.encodeComponent(
+                                        patientAddress!,
+                                      );
+                                      final uri = Uri.parse(
+                                        'https://www.google.com/maps/search/?api=1&query=$encoded',
+                                      );
                                       launchUrl(uri);
                                     },
                                     child: Container(
                                       height: 42,
                                       width: 42,
                                       decoration: BoxDecoration(
-                                        color: colorWithOpacity(loginButton, 0.12),
+                                        color: colorWithOpacity(
+                                          loginButton,
+                                          0.12,
+                                        ),
                                         borderRadius: BorderRadius.circular(14),
                                       ),
                                       child: Center(
-                                        child: Icon(Icons.map_outlined, size: 20, color: loginButton),
+                                        child: Icon(
+                                          Icons.map_outlined,
+                                          size: 20,
+                                          color: loginButton,
+                                        ),
                                       ),
                                     ),
                                   ),
                                 GestureDetector(
                                   onTap: () {
-                                    if (body['peerId'] == null || body['peerId']!.isEmpty) {
+                                    if (body['peerId'] == null ||
+                                        body['peerId']!.isEmpty) {
                                       Fluttertoast.showToast(
-                                        msg: 'Chat is not available for this patient yet.',
+                                        msg:
+                                            'Chat is not available for this patient yet.',
                                         toastLength: Toast.LENGTH_SHORT,
                                         gravity: ToastGravity.BOTTOM,
                                       );
                                       return;
                                     }
                                     Navigator.push(
-                                        context,
-                                        MaterialPageRoute(
-                                            builder: (context) => ChatPage(
-                                                  peerId: body['peerId']!,
-                                                  peerAvatar: body['peerAvatar'] ?? '',
-                                                  peerNickname: body['nickName'] ?? '',
-                                                  token: body['token'] ?? '',
-                                                  isNavigate: 'chatHome',
-                                                )));
+                                      context,
+                                      MaterialPageRoute(
+                                        builder: (context) => ChatPage(
+                                          peerId: body['peerId']!,
+                                          peerAvatar: body['peerAvatar'] ?? '',
+                                          peerNickname: body['nickName'] ?? '',
+                                          token: body['token'] ?? '',
+                                          isNavigate: 'chatHome',
+                                        ),
+                                      ),
+                                    );
                                   },
                                   child: Container(
                                     height: 42,
                                     width: 42,
                                     decoration: BoxDecoration(
-                                      color: colorWithOpacity(loginButton, 0.12),
+                                      color: colorWithOpacity(
+                                        loginButton,
+                                        0.12,
+                                      ),
                                       borderRadius: BorderRadius.circular(14),
                                     ),
                                     child: Center(
@@ -507,50 +633,91 @@ class _patientDetailsScreenState extends State<patientDetailsScreen> with Ticker
                               decoration: BoxDecoration(
                                 shape: BoxShape.circle,
                                 color: colorWithOpacity(loginButton, 0.12),
-                                border: Border.all(color: colorWithOpacity(loginButton, 0.35), width: 2),
+                                border: Border.all(
+                                  color: colorWithOpacity(loginButton, 0.35),
+                                  width: 2,
+                                ),
                               ),
                               child: ClipOval(
                                 child: CachedNetworkImage(
                                   alignment: Alignment.center,
                                   imageUrl: '$fullImage',
                                   fit: BoxFit.cover,
-                                  placeholder: (context, url) => Center(child: CircularProgressIndicator()),
-                                  errorWidget: (context, url, error) => Image.asset("assets/images/no_image.jpg", fit: BoxFit.cover),
+                                  placeholder: (context, url) => Center(
+                                    child: CircularProgressIndicator(),
+                                  ),
+                                  errorWidget: (context, url, error) =>
+                                      Image.asset(
+                                        "assets/images/no_image.jpg",
+                                        fit: BoxFit.cover,
+                                      ),
                                 ),
                               ),
                             ),
                             SizedBox(height: 10),
                             Text(
                               '$name',
-                              style: TextStyle(fontSize: 20, color: hintColor, fontWeight: FontWeight.w600),
+                              style: TextStyle(
+                                fontSize: 20,
+                                color: hintColor,
+                                fontWeight: FontWeight.w600,
+                              ),
                             ),
                             SizedBox(height: 4),
                             Text(
-                              getTranslated(context,AppString. information_booking_id).toString() + '$appointmentId',
-                              style: TextStyle(fontSize: 13, color: passwordVisibility),
+                              getTranslated(
+                                    context,
+                                    AppString.information_booking_id,
+                                  ).toString() +
+                                  '$appointmentId',
+                              style: TextStyle(
+                                fontSize: 13,
+                                color: passwordVisibility,
+                              ),
                             ),
                           ],
                         ),
                       ),
                       StreamBuilder<QuerySnapshot>(
-                        stream: homeProvider.getStreamFireStoreSpecificUser(FirestoreConstants.pathUserCollection, 1, userId.toString()),
-                        builder: (BuildContext context, AsyncSnapshot<QuerySnapshot> snapshot) {
-                          if (snapshot.hasData) {
-                            if ((snapshot.data?.docs.length ?? 0) > 0) {
-                              UserChat userChat = UserChat.fromDocument(snapshot.data!.docs[0]);
-                              body = {"peerId": userChat.id, "nickName": userChat.nickname, "peerAvatar": userChat.photoUrl, "token": userChat.token};
-                              return SizedBox();
-                            } else {
-                              return SizedBox();
-                            }
-                          } else {
-                            return SizedBox();
-                          }
-                        },
+                        stream: homeProvider.getStreamFireStoreSpecificUser(
+                          FirestoreConstants.pathUserCollection,
+                          1,
+                          userId.toString(),
+                        ),
+                        builder:
+                            (
+                              BuildContext context,
+                              AsyncSnapshot<QuerySnapshot> snapshot,
+                            ) {
+                              if (snapshot.hasData) {
+                                if ((snapshot.data?.docs.length ?? 0) > 0) {
+                                  UserChat userChat = UserChat.fromDocument(
+                                    snapshot.data!.docs[0],
+                                  );
+                                  body = {
+                                    "peerId": userChat.id,
+                                    "nickName": userChat.nickname,
+                                    "peerAvatar": userChat.photoUrl,
+                                    "token": userChat.token,
+                                  };
+                                  return SizedBox();
+                                } else {
+                                  return SizedBox();
+                                }
+                              } else {
+                                return SizedBox();
+                              }
+                            },
                       ),
                       Container(
-                        margin: EdgeInsets.symmetric(horizontal: width! * 0.06, vertical: height * 0.01),
-                        padding: EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                        margin: EdgeInsets.symmetric(
+                          horizontal: width! * 0.06,
+                          vertical: height * 0.01,
+                        ),
+                        padding: EdgeInsets.symmetric(
+                          horizontal: 12,
+                          vertical: 12,
+                        ),
                         decoration: BoxDecoration(
                           color: colorWhite,
                           borderRadius: BorderRadius.circular(16),
@@ -571,13 +738,27 @@ class _patientDetailsScreenState extends State<patientDetailsScreen> with Ticker
                               child: Column(
                                 children: [
                                   Text(
-                                    getTranslated(context, AppString.information_amount).toString(),
-                                    style: TextStyle(fontSize: 13, color: hintColor, fontWeight: FontWeight.w600),
+                                    getTranslated(
+                                      context,
+                                      AppString.information_amount,
+                                    ).toString(),
+                                    style: TextStyle(
+                                      fontSize: 13,
+                                      color: hintColor,
+                                      fontWeight: FontWeight.w600,
+                                    ),
                                   ),
                                   SizedBox(height: 4),
                                   Text(
-                                    SharedPreferenceHelper.getString(Preferences.currency_symbol) + (amount?.toStringAsFixed(2) ?? '0.0'),
-                                    style: TextStyle(fontSize: 15, color: hintColor, fontWeight: FontWeight.w600),
+                                    SharedPreferenceHelper.getString(
+                                          Preferences.currency_symbol,
+                                        ) +
+                                        (amount?.toStringAsFixed(2) ?? '0.0'),
+                                    style: TextStyle(
+                                      fontSize: 15,
+                                      color: hintColor,
+                                      fontWeight: FontWeight.w600,
+                                    ),
                                   ),
                                 ],
                               ),
@@ -587,13 +768,24 @@ class _patientDetailsScreenState extends State<patientDetailsScreen> with Ticker
                               child: Column(
                                 children: [
                                   Text(
-                                    getTranslated(context, AppString.information_date).toString(),
-                                    style: TextStyle(fontSize: 13, color: hintColor, fontWeight: FontWeight.w600),
+                                    getTranslated(
+                                      context,
+                                      AppString.information_date,
+                                    ).toString(),
+                                    style: TextStyle(
+                                      fontSize: 13,
+                                      color: hintColor,
+                                      fontWeight: FontWeight.w600,
+                                    ),
                                   ),
                                   SizedBox(height: 4),
                                   Text(
                                     '$date',
-                                    style: TextStyle(fontSize: 15, color: hintColor, fontWeight: FontWeight.w600),
+                                    style: TextStyle(
+                                      fontSize: 15,
+                                      color: hintColor,
+                                      fontWeight: FontWeight.w600,
+                                    ),
                                   ),
                                 ],
                               ),
@@ -603,14 +795,25 @@ class _patientDetailsScreenState extends State<patientDetailsScreen> with Ticker
                               child: Column(
                                 children: [
                                   Text(
-                                    getTranslated(context, AppString.information_appointment).toString(),
-                                    style: TextStyle(fontSize: 13, color: hintColor, fontWeight: FontWeight.w600),
+                                    getTranslated(
+                                      context,
+                                      AppString.information_appointment,
+                                    ).toString(),
+                                    style: TextStyle(
+                                      fontSize: 13,
+                                      color: hintColor,
+                                      fontWeight: FontWeight.w600,
+                                    ),
                                   ),
                                   SizedBox(height: 4),
                                   Text(
                                     "$appointment",
-                                    style: TextStyle(fontSize: 15, color: hintColor, fontWeight: FontWeight.w600),
-                                  )
+                                    style: TextStyle(
+                                      fontSize: 15,
+                                      color: hintColor,
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                  ),
                                 ],
                               ),
                             ),
@@ -618,7 +821,10 @@ class _patientDetailsScreenState extends State<patientDetailsScreen> with Ticker
                         ),
                       ),
                       new Container(
-                        margin: EdgeInsets.symmetric(horizontal: width! * 0.06, vertical: height * 0.01),
+                        margin: EdgeInsets.symmetric(
+                          horizontal: width! * 0.06,
+                          vertical: height * 0.01,
+                        ),
                         padding: EdgeInsets.all(6),
                         decoration: BoxDecoration(
                           color: colorWithOpacity(tabBar, 0.7),
@@ -639,9 +845,15 @@ class _patientDetailsScreenState extends State<patientDetailsScreen> with Ticker
                               ),
                             ],
                           ),
-                          labelStyle: TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
+                          labelStyle: TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
+                          ),
                           unselectedLabelColor: hintColor,
-                          unselectedLabelStyle: TextStyle(fontSize: 12, fontWeight: FontWeight.w500),
+                          unselectedLabelStyle: TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w500,
+                          ),
                           tabs: tabs,
                         ),
                       ),
@@ -658,29 +870,57 @@ class _patientDetailsScreenState extends State<patientDetailsScreen> with Ticker
                                   hideButton == false
                                       ? sectionCard(
                                           child: Column(
-                                            crossAxisAlignment: CrossAxisAlignment.start,
+                                            crossAxisAlignment:
+                                                CrossAxisAlignment.start,
                                             children: [
                                               // Title + status chip in the same row
                                               Row(
-                                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                                mainAxisAlignment:
+                                                    MainAxisAlignment
+                                                        .spaceBetween,
                                                 children: [
                                                   sectionHeader(
                                                     icon: Icons.event_available,
-                                                    title: getTranslated(context, AppString.information_appointment_status).toString(),
+                                                    title: getTranslated(
+                                                      context,
+                                                      AppString
+                                                          .information_appointment_status,
+                                                    ).toString(),
                                                   ),
                                                   Container(
-                                                    padding: EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                                                    padding:
+                                                        EdgeInsets.symmetric(
+                                                          horizontal: 12,
+                                                          vertical: 6,
+                                                        ),
                                                     decoration: BoxDecoration(
-                                                      color: colorWithOpacity(statusBadgeColor(appointmentStatus), 0.12),
-                                                      borderRadius: BorderRadius.circular(20),
-                                                      border: Border.all(color: statusBadgeColor(appointmentStatus)),
+                                                      color: colorWithOpacity(
+                                                        statusBadgeColor(
+                                                          appointmentStatus,
+                                                        ),
+                                                        0.12,
+                                                      ),
+                                                      borderRadius:
+                                                          BorderRadius.circular(
+                                                            20,
+                                                          ),
+                                                      border: Border.all(
+                                                        color: statusBadgeColor(
+                                                          appointmentStatus,
+                                                        ),
+                                                      ),
                                                     ),
                                                     child: Text(
-                                                      formatStatus(appointmentStatus),
+                                                      formatStatus(
+                                                        appointmentStatus,
+                                                      ),
                                                       style: TextStyle(
                                                         fontSize: 13,
-                                                        fontWeight: FontWeight.w600,
-                                                        color: statusBadgeColor(appointmentStatus),
+                                                        fontWeight:
+                                                            FontWeight.w600,
+                                                        color: statusBadgeColor(
+                                                          appointmentStatus,
+                                                        ),
                                                       ),
                                                     ),
                                                   ),
@@ -693,23 +933,49 @@ class _patientDetailsScreenState extends State<patientDetailsScreen> with Ticker
                                                   children: [
                                                     Expanded(
                                                       child: OutlinedButton(
-                                                        onPressed: _canStart && (visitType ?? '').toLowerCase() != 'home_visit'
+                                                        onPressed:
+                                                            _canStart &&
+                                                                (visitType ??
+                                                                            '')
+                                                                        .toLowerCase() !=
+                                                                    'home_visit'
                                                             ? () {
-                                                                _addVideoOverlay(context);
+                                                                _addVideoOverlay(
+                                                                  context,
+                                                                );
                                                               }
                                                             : null,
                                                         style: OutlinedButton.styleFrom(
-                                                          foregroundColor: loginButton,
+                                                          foregroundColor:
+                                                              loginButton,
                                                           side: BorderSide(
-                                                            color: (_canStart && (visitType ?? '').toLowerCase() != 'home_visit')
+                                                            color:
+                                                                (_canStart &&
+                                                                    (visitType ??
+                                                                                '')
+                                                                            .toLowerCase() !=
+                                                                        'home_visit')
                                                                 ? loginButton
                                                                 : divider,
                                                           ),
-                                                          padding: EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-                                                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                                                          padding:
+                                                              EdgeInsets.symmetric(
+                                                                horizontal: 14,
+                                                                vertical: 10,
+                                                              ),
+                                                          shape: RoundedRectangleBorder(
+                                                            borderRadius:
+                                                                BorderRadius.circular(
+                                                                  10,
+                                                                ),
+                                                          ),
                                                         ),
                                                         child: Text(
-                                                          getTranslated(context, AppString.information_start_status).toString(),
+                                                          getTranslated(
+                                                            context,
+                                                            AppString
+                                                                .information_start_status,
+                                                          ).toString(),
                                                         ),
                                                       ),
                                                     ),
@@ -718,18 +984,35 @@ class _patientDetailsScreenState extends State<patientDetailsScreen> with Ticker
                                                       child: ElevatedButton(
                                                         onPressed: _canComplete
                                                             ? () {
-                                                                statusChangeRequest("complete");
+                                                                statusChangeRequest(
+                                                                  "complete",
+                                                                );
                                                               }
                                                             : null,
                                                         style: ElevatedButton.styleFrom(
-                                                          backgroundColor: loginButton,
-                                                          foregroundColor: colorWhite,
+                                                          backgroundColor:
+                                                              loginButton,
+                                                          foregroundColor:
+                                                              colorWhite,
                                                           elevation: 0,
-                                                          padding: EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-                                                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                                                          padding:
+                                                              EdgeInsets.symmetric(
+                                                                horizontal: 14,
+                                                                vertical: 10,
+                                                              ),
+                                                          shape: RoundedRectangleBorder(
+                                                            borderRadius:
+                                                                BorderRadius.circular(
+                                                                  10,
+                                                                ),
+                                                          ),
                                                         ),
                                                         child: Text(
-                                                          getTranslated(context, AppString.information_complete_status).toString(),
+                                                          getTranslated(
+                                                            context,
+                                                            AppString
+                                                                .information_complete_status,
+                                                          ).toString(),
                                                         ),
                                                       ),
                                                     ),
@@ -738,59 +1021,104 @@ class _patientDetailsScreenState extends State<patientDetailsScreen> with Ticker
                                             ],
                                           ),
                                         )
-                                      : StatefulBuilder(builder: (context, myState) {
-                                          return Visibility(
-                                            visible: hideButton,
-                                            child: sectionCard(
-                                              child: Row(
-                                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                                children: [
-                                                  Expanded(
-                                                    child: ElevatedButton(
-                                                      onPressed: () {
-                                                        myState(() {
-                                                          statusChangeRequest("approve");
-                                                        });
-                                                      },
-                                                      style: ElevatedButton.styleFrom(
-                                                        backgroundColor: loginButton,
-                                                        foregroundColor: colorWhite,
-                                                        elevation: 0,
-                                                        padding: EdgeInsets.symmetric(vertical: 12),
-                                                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                                      : StatefulBuilder(
+                                          builder: (context, myState) {
+                                            return Visibility(
+                                              visible: hideButton,
+                                              child: sectionCard(
+                                                child: Row(
+                                                  mainAxisAlignment:
+                                                      MainAxisAlignment
+                                                          .spaceBetween,
+                                                  children: [
+                                                    Expanded(
+                                                      child: ElevatedButton(
+                                                        onPressed: () {
+                                                          myState(() {
+                                                            statusChangeRequest(
+                                                              "approve",
+                                                            );
+                                                          });
+                                                        },
+                                                        style: ElevatedButton.styleFrom(
+                                                          backgroundColor:
+                                                              loginButton,
+                                                          foregroundColor:
+                                                              colorWhite,
+                                                          elevation: 0,
+                                                          padding:
+                                                              EdgeInsets.symmetric(
+                                                                vertical: 12,
+                                                              ),
+                                                          shape: RoundedRectangleBorder(
+                                                            borderRadius:
+                                                                BorderRadius.circular(
+                                                                  12,
+                                                                ),
+                                                          ),
+                                                        ),
+                                                        child: Text(
+                                                          getTranslated(
+                                                            context,
+                                                            AppString
+                                                                .information_approve_status,
+                                                          ).toString(),
+                                                        ),
                                                       ),
-                                                      child: Text(getTranslated(context, AppString.information_approve_status).toString()),
                                                     ),
-                                                  ),
-                                                  SizedBox(width: 12),
-                                                  Expanded(
-                                                    child: OutlinedButton(
-                                                      onPressed: () {
-                                                        setState(() {
-                                                          statusChangeRequest("cancel");
-                                                        });
-                                                      },
-                                                      style: OutlinedButton.styleFrom(
-                                                        foregroundColor: statusCancel,
-                                                        side: BorderSide(color: statusCancel),
-                                                        padding: EdgeInsets.symmetric(vertical: 12),
-                                                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                                                    SizedBox(width: 12),
+                                                    Expanded(
+                                                      child: OutlinedButton(
+                                                        onPressed: () {
+                                                          setState(() {
+                                                            statusChangeRequest(
+                                                              "cancel",
+                                                            );
+                                                          });
+                                                        },
+                                                        style: OutlinedButton.styleFrom(
+                                                          foregroundColor:
+                                                              statusCancel,
+                                                          side: BorderSide(
+                                                            color: statusCancel,
+                                                          ),
+                                                          padding:
+                                                              EdgeInsets.symmetric(
+                                                                vertical: 12,
+                                                              ),
+                                                          shape: RoundedRectangleBorder(
+                                                            borderRadius:
+                                                                BorderRadius.circular(
+                                                                  12,
+                                                                ),
+                                                          ),
+                                                        ),
+                                                        child: Text(
+                                                          getTranslated(
+                                                            context,
+                                                            AppString
+                                                                .information_cancel_status,
+                                                          ).toString(),
+                                                        ),
                                                       ),
-                                                      child: Text(getTranslated(context, AppString.information_cancel_status).toString()),
                                                     ),
-                                                  ),
-                                                ],
+                                                  ],
+                                                ),
                                               ),
-                                            ),
-                                          );
-                                        }),
+                                            );
+                                          },
+                                        ),
                                   sectionCard(
                                     child: Column(
-                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
                                       children: [
                                         infoRow(
                                           icon: Icons.person_outline,
-                                          title: getTranslated(context, AppString.information_patient_name).toString(),
+                                          title: getTranslated(
+                                            context,
+                                            AppString.information_patient_name,
+                                          ).toString(),
                                           value: safeText(name),
                                         ),
                                         SizedBox(height: 14),
@@ -798,7 +1126,10 @@ class _patientDetailsScreenState extends State<patientDetailsScreen> with Ticker
                                         SizedBox(height: 14),
                                         infoRow(
                                           icon: Icons.cake_outlined,
-                                          title: getTranslated(context, AppString.information_patient_age).toString(),
+                                          title: getTranslated(
+                                            context,
+                                            AppString.information_patient_age,
+                                          ).toString(),
                                           value: safeText(age?.toString()),
                                         ),
                                         SizedBox(height: 14),
@@ -806,7 +1137,11 @@ class _patientDetailsScreenState extends State<patientDetailsScreen> with Ticker
                                         SizedBox(height: 14),
                                         infoRow(
                                           icon: Icons.phone_outlined,
-                                          title: getTranslated(context, AppString.information_patient_phone_number).toString(),
+                                          title: getTranslated(
+                                            context,
+                                            AppString
+                                                .information_patient_phone_number,
+                                          ).toString(),
                                           value: safeText(phoneNo),
                                         ),
                                         SizedBox(height: 14),
@@ -814,7 +1149,10 @@ class _patientDetailsScreenState extends State<patientDetailsScreen> with Ticker
                                         SizedBox(height: 14),
                                         infoRow(
                                           icon: Icons.access_time,
-                                          title: getTranslated(context, AppString.information_patient_time).toString(),
+                                          title: getTranslated(
+                                            context,
+                                            AppString.information_patient_time,
+                                          ).toString(),
                                           value: safeText(time),
                                         ),
                                         SizedBox(height: 14),
@@ -822,7 +1160,11 @@ class _patientDetailsScreenState extends State<patientDetailsScreen> with Ticker
                                         SizedBox(height: 14),
                                         infoRow(
                                           icon: Icons.location_on_outlined,
-                                          title: getTranslated(context, AppString.information_patient_address).toString(),
+                                          title: getTranslated(
+                                            context,
+                                            AppString
+                                                .information_patient_address,
+                                          ).toString(),
                                           value: safeText(patientAddress),
                                           maxLines: 3,
                                         ),
@@ -832,8 +1174,14 @@ class _patientDetailsScreenState extends State<patientDetailsScreen> with Ticker
                                           SizedBox(height: 14),
                                           infoRow(
                                             icon: Icons.shield_outlined,
-                                            title: getTranslated(context, AppString.patientInsured).toString(),
-                                            value: getTranslated(context, AppString.patientIsNotInsured).toString(),
+                                            title: getTranslated(
+                                              context,
+                                              AppString.patientInsured,
+                                            ).toString(),
+                                            value: getTranslated(
+                                              context,
+                                              AppString.patientIsNotInsured,
+                                            ).toString(),
                                             maxLines: 2,
                                           ),
                                         ],
@@ -843,7 +1191,10 @@ class _patientDetailsScreenState extends State<patientDetailsScreen> with Ticker
                                           SizedBox(height: 14),
                                           infoRow(
                                             icon: Icons.verified_user_outlined,
-                                            title: getTranslated(context, AppString.policy_provider).toString(),
+                                            title: getTranslated(
+                                              context,
+                                              AppString.policy_provider,
+                                            ).toString(),
                                             value: safeText(policyInsurerName),
                                             maxLines: 2,
                                           ),
@@ -852,7 +1203,10 @@ class _patientDetailsScreenState extends State<patientDetailsScreen> with Ticker
                                           SizedBox(height: 14),
                                           infoRow(
                                             icon: Icons.badge_outlined,
-                                            title: getTranslated(context, AppString.policy_number).toString(),
+                                            title: getTranslated(
+                                              context,
+                                              AppString.policy_number,
+                                            ).toString(),
                                             value: safeText(policyNumber),
                                             maxLines: 2,
                                           ),
@@ -871,28 +1225,56 @@ class _patientDetailsScreenState extends State<patientDetailsScreen> with Ticker
                               child: Column(
                                 children: [
                                   if (widget.id != null && _canPrescribe)
+                                    sectionCard(child: ListTile(
+                                      leading: const Icon(Icons.monitor_heart_outlined, color: Colors.teal),
+                                      title: const Text('Allergies, vitals and clinical requests'),
+                                      subtitle: const Text('Record observations, investigations, referrals and follow-up.'),
+                                      trailing: const Icon(Icons.chevron_right),
+                                      onTap: () => Navigator.push(context, MaterialPageRoute<void>(builder: (_) => ClinicalWorkspaceScreen(appointmentId: widget.id!, patientName: name))),
+                                    )),
+                                  if (widget.id != null && _canPrescribe)
                                     sectionCard(
                                       child: ListTile(
                                         contentPadding: EdgeInsets.zero,
-                                        leading: const Icon(Icons.edit_document, color: Colors.teal),
-                                        title: const Text('Clinical encounter notes'),
-                                        subtitle: const Text('Document findings, save drafts and finalize notes for this appointment.'),
-                                        trailing: const Icon(Icons.chevron_right),
+                                        leading: const Icon(
+                                          Icons.edit_document,
+                                          color: Colors.teal,
+                                        ),
+                                        title: const Text(
+                                          'Clinical encounter notes',
+                                        ),
+                                        subtitle: const Text(
+                                          'Document findings, save drafts and finalize notes for this appointment.',
+                                        ),
+                                        trailing: const Icon(
+                                          Icons.chevron_right,
+                                        ),
                                         onTap: () => Navigator.push(
                                           context,
                                           MaterialPageRoute(
-                                            builder: (context) => ClinicalNotesScreen(appointmentId: widget.id!),
+                                            builder: (context) =>
+                                                ClinicalNotesScreen(
+                                                  appointmentId: widget.id!,
+                                                  patientName: name,
+                                                  appointmentReference: appointmentId,
+                                                ),
                                           ),
                                         ),
                                       ),
                                     ),
                                   sectionCard(
                                     child: Column(
-                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
                                       children: [
                                         sectionHeader(
-                                          icon: Icons.health_and_safety_outlined,
-                                          title: getTranslated(context, AppString.information_patient_illness_information).toString(),
+                                          icon:
+                                              Icons.health_and_safety_outlined,
+                                          title: getTranslated(
+                                            context,
+                                            AppString
+                                                .information_patient_illness_information,
+                                          ).toString(),
                                         ),
                                         SizedBox(height: 10),
                                         sectionBodyText(safeText(illness)),
@@ -901,11 +1283,16 @@ class _patientDetailsScreenState extends State<patientDetailsScreen> with Ticker
                                   ),
                                   sectionCard(
                                     child: Column(
-                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
                                       children: [
                                         sectionHeader(
                                           icon: Icons.medical_services_outlined,
-                                          title: getTranslated(context, AppString.information_side_effect_drug).toString(),
+                                          title: getTranslated(
+                                            context,
+                                            AppString
+                                                .information_side_effect_drug,
+                                          ).toString(),
                                         ),
                                         SizedBox(height: 10),
                                         sectionBodyText(safeText(drugEffect)),
@@ -914,11 +1301,15 @@ class _patientDetailsScreenState extends State<patientDetailsScreen> with Ticker
                                   ),
                                   sectionCard(
                                     child: Column(
-                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
                                       children: [
                                         sectionHeader(
                                           icon: Icons.sticky_note_2_outlined,
-                                          title: getTranslated(context, AppString.information_note).toString(),
+                                          title: getTranslated(
+                                            context,
+                                            AppString.information_note,
+                                          ).toString(),
                                         ),
                                         SizedBox(height: 10),
                                         sectionBodyText(safeText(note)),
@@ -929,34 +1320,52 @@ class _patientDetailsScreenState extends State<patientDetailsScreen> with Ticker
                                       ? SizedBox()
                                       : sectionCard(
                                           child: Column(
-                                            crossAxisAlignment: CrossAxisAlignment.start,
+                                            crossAxisAlignment:
+                                                CrossAxisAlignment.start,
                                             children: [
                                               sectionHeader(
-                                                icon: Icons.insert_photo_outlined,
-                                                title: getTranslated(context, AppString.information_report_image_title).toString(),
+                                                icon:
+                                                    Icons.insert_photo_outlined,
+                                                title: getTranslated(
+                                                  context,
+                                                  AppString
+                                                      .information_report_image_title,
+                                                ).toString(),
                                               ),
                                               SizedBox(height: 10),
                                               Container(
                                                 height: 120,
                                                 width: width,
                                                 child: GridView.builder(
-                                                  physics: NeverScrollableScrollPhysics(),
+                                                  physics:
+                                                      NeverScrollableScrollPhysics(),
                                                   shrinkWrap: true,
-                                                  scrollDirection: Axis.vertical,
-                                                  itemCount: reportImages.length,
-                                                  gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                                                    crossAxisCount: 3,
-                                                  ),
+                                                  scrollDirection:
+                                                      Axis.vertical,
+                                                  itemCount:
+                                                      reportImages.length,
+                                                  gridDelegate:
+                                                      SliverGridDelegateWithFixedCrossAxisCount(
+                                                        crossAxisCount: 3,
+                                                      ),
                                                   itemBuilder: (context, index) {
                                                     return Container(
                                                       margin: EdgeInsets.all(5),
                                                       decoration: BoxDecoration(
-                                                        borderRadius: BorderRadius.circular(12),
-                                                        border: Border.all(color: divider),
+                                                        borderRadius:
+                                                            BorderRadius.circular(
+                                                              12,
+                                                            ),
+                                                        border: Border.all(
+                                                          color: divider,
+                                                        ),
                                                       ),
                                                       child: FullScreenWidget(
                                                         child: ClipRRect(
-                                                          borderRadius: BorderRadius.circular(12),
+                                                          borderRadius:
+                                                              BorderRadius.circular(
+                                                                12,
+                                                              ),
                                                           child: Image.network(
                                                             reportImages[index],
                                                             fit: BoxFit.cover,
@@ -973,340 +1382,212 @@ class _patientDetailsScreenState extends State<patientDetailsScreen> with Ticker
                                 ],
                               ),
                             ),
+
                             ///tab 3
                             SingleChildScrollView(
-                                scrollDirection: Axis.vertical,
-                                physics: AlwaysScrollableScrollPhysics(),
-                                child: pdf == ''
-                                    ? Column(
-                                        mainAxisAlignment: MainAxisAlignment.spaceAround,
-                                        crossAxisAlignment: CrossAxisAlignment.start,
-                                        children: [
-                                          sectionCard(
-                                            child: Column(
-                                              crossAxisAlignment: CrossAxisAlignment.start,
-                                              children: [
-                                                sectionHeader(
-                                                  icon: Icons.medication_outlined,
-                                                  title: getTranslated(context, AppString.doctor_prescription).toString(),
-                                                ),
-                                                SizedBox(height: 12),
-                                                if (!_canPrescribe)
-                                                  const Padding(
-                                                    padding: EdgeInsets.symmetric(vertical: 12),
-                                                    child: Text(
-                                                      'Prescription creation is restricted to approved doctors. Providers can continue scheduling, visiting and communicating with patients.',
-                                                      style: TextStyle(fontSize: 14),
+                              scrollDirection: Axis.vertical,
+                              physics: AlwaysScrollableScrollPhysics(),
+                              child: pdf == ''
+                                  ? Column(
+                                      mainAxisAlignment:
+                                          MainAxisAlignment.spaceAround,
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
+                                      children: [
+                                        sectionCard(
+                                          child: Column(
+                                            crossAxisAlignment:
+                                                CrossAxisAlignment.start,
+                                            children: [
+                                              sectionHeader(
+                                                icon: Icons.medication_outlined,
+                                                title: getTranslated(
+                                                  context,
+                                                  AppString.doctor_prescription,
+                                                ).toString(),
+                                              ),
+                                              SizedBox(height: 12),
+                                              if (!_canPrescribe)
+                                                const Padding(
+                                                  padding: EdgeInsets.symmetric(
+                                                    vertical: 12,
+                                                  ),
+                                                  child: Text(
+                                                    'Prescription creation is restricted to approved doctors. Providers can continue scheduling, visiting and communicating with patients.',
+                                                    style: TextStyle(
+                                                      fontSize: 14,
                                                     ),
                                                   ),
-                                                if (_canPrescribe)
-                                                  ElevatedButton.icon(
-                                                  onPressed: () {
-                                                    _days.clear();
-                                                    alertValueFirst = false;
-                                                    alertValueSecond = false;
-                                                    alertValueThird = false;
-
-                                                    showDialog(
-                                                        context: context,
-                                                        builder: (context) {
-                                                          return Form(
-                                                            key: _formKey,
-                                                            child: StatefulBuilder(
-                                                              builder: (BuildContext context, StateSetter myState) {
-                                                                return AlertDialog(
-                                                                  insetPadding: EdgeInsets.all(10),
-                                                                  title: Text(getTranslated(context, AppString.information_medicine_title).toString()),
-                                                                  content: Container(
-                                                                    margin: EdgeInsets.symmetric(horizontal: width! * 0.02),
-                                                                    height: height * 0.4,
-                                                                    width: width! * 1.0,
-                                                                    child: Column(
-                                                                      children: [
-                                                                        Row(
-                                                                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                                                          crossAxisAlignment: CrossAxisAlignment.start,
-                                                                          children: [
-                                                                            Container(
-                                                                              width: 200,
-                                                                              height: 80,
-                                                                              child: TextDropdownFormField(
-                                                                                options: medicineReq,
-                                                                                decoration: InputDecoration(
-                                                                                    enabledBorder: UnderlineInputBorder(borderSide: BorderSide(color: black)),
-                                                                                    suffixIcon: Icon(Icons.arrow_drop_down),
-                                                                                    labelText: getTranslated(context, AppString.information_medicine_title).toString()),
-                                                                                dropdownHeight: 200,
-                                                                                onChanged: (dynamic value) {
-                                                                                  selectedMedicineValue = value;
-                                                                                },
-                                                                              ),
-                                                                            ),
-                                                                            FittedBox(
-                                                                              fit: BoxFit.fitWidth,
-                                                                              child: Container(
-                                                                                height: 70,
-                                                                                width: width! / 5,
-                                                                                alignment: Alignment.center,
-                                                                                child: TextFormField(
-                                                                                  keyboardType: TextInputType.numberWithOptions(decimal: true),
-                                                                                  inputFormatters: [new FilteringTextInputFormatter.allow(RegExp("[0-9]"))],
-                                                                                  controller: _days,
-                                                                                  decoration: InputDecoration(
-                                                                                    contentPadding: EdgeInsets.all(5),
-                                                                                    enabledBorder: UnderlineInputBorder(borderSide: BorderSide(color: black)),
-                                                                                    hintText: getTranslated(context, AppString.information_medicine_days).toString(),
-                                                                                  ),
-                                                                                  onChanged: (value) {
-                                                                                    myState(() {
-                                                                                      valueDays = value;
-                                                                                    });
-                                                                                  },
-                                                                                ),
-                                                                              ),
-                                                                            ),
-                                                                          ],
-                                                                        ),
-                                                                        Container(
-                                                                            margin: EdgeInsets.only(
-                                                                              left: width! * 0.04,
-                                                                              right: width! * 0.04,
-                                                                            ),
-                                                                            child: Column(
-                                                                              children: [
-                                                                                Container(
-                                                                                  margin: EdgeInsets.only(top: height * 0.01),
-                                                                                  child: Transform.scale(
-                                                                                    scale: 1.2,
-                                                                                    child: CheckboxListTile(
-                                                                                      controlAffinity: ListTileControlAffinity.leading,
-                                                                                      title: Text(
-                                                                                        getTranslated(context, AppString.information_medicine_morning).toString(),
-                                                                                        style: TextStyle(fontSize: 16, color: hintColor),
-                                                                                      ),
-                                                                                      checkColor: loginButton,
-                                                                                      activeColor: hintColor,
-                                                                                      value: this.alertValueFirst,
-                                                                                      onChanged: (bool? value) {
-                                                                                        myState(() {
-                                                                                          alertValueFirst = value;
-                                                                                        });
-                                                                                      },
-                                                                                    ),
-                                                                                  ),
-                                                                                ),
-                                                                                Container(
-                                                                                  margin: EdgeInsets.only(top: height * 0.01),
-                                                                                  child: Transform.scale(
-                                                                                    scale: 1.2,
-                                                                                    child: CheckboxListTile(
-                                                                                      controlAffinity: ListTileControlAffinity.leading,
-                                                                                      title: Text(
-                                                                                        getTranslated(context, AppString.information_medicine_afternoon).toString(),
-                                                                                        style: TextStyle(fontSize: 16, color: hintColor),
-                                                                                      ),
-                                                                                      checkColor: loginButton,
-                                                                                      activeColor: hintColor,
-                                                                                      value: this.alertValueSecond,
-                                                                                      onChanged: (bool? value) {
-                                                                                        myState(() {
-                                                                                          alertValueSecond = value;
-                                                                                        });
-                                                                                      },
-                                                                                    ),
-                                                                                  ),
-                                                                                ),
-                                                                                Container(
-                                                                                  margin: EdgeInsets.only(top: height * 0.01),
-                                                                                  child: Transform.scale(
-                                                                                    scale: 1.2,
-                                                                                    child: CheckboxListTile(
-                                                                                      controlAffinity: ListTileControlAffinity.leading,
-                                                                                      title: Text(
-                                                                                        getTranslated(context, AppString.information_medicine_night).toString(),
-                                                                                        style: TextStyle(fontSize: 16, color: hintColor),
-                                                                                      ),
-                                                                                      checkColor: loginButton,
-                                                                                      activeColor: hintColor,
-                                                                                      value: this.alertValueThird,
-                                                                                      onChanged: (bool? value) {
-                                                                                        myState(() {
-                                                                                          alertValueThird = value;
-                                                                                        });
-                                                                                      },
-                                                                                    ),
-                                                                                  ),
-                                                                                ),
-                                                                              ],
-                                                                            )),
-                                                                      ],
-                                                                    ),
-                                                                  ),
-                                                                  actions: <Widget>[
-                                                                    OutlinedButton(
-                                                                      child: Text(getTranslated(context, AppString.profile_dialog_ok_button).toString()),
-                                                                      onPressed: () {
-                                                                        if (selectedMedicineValue == null) {
-                                                                          Fluttertoast.showToast(
-                                                                            msg: getTranslated(context, AppString.please_select_medicines).toString(),
-                                                                            toastLength: Toast.LENGTH_SHORT,
-                                                                            gravity: ToastGravity.BOTTOM,
-                                                                          );
-                                                                        } else if (int.tryParse(_days.text.trim()) == null ||
-                                                                            int.parse(_days.text.trim()) < 1 ||
-                                                                            int.parse(_days.text.trim()) > 365) {
-                                                                          Fluttertoast.showToast(
-                                                                            msg: 'Enter a duration between 1 and 365 days.',
-                                                                            toastLength: Toast.LENGTH_SHORT,
-                                                                          );
-                                                                        } else if (alertValueFirst != true &&
-                                                                            alertValueSecond != true &&
-                                                                            alertValueThird != true) {
-                                                                          Fluttertoast.showToast(
-                                                                            msg: 'Select at least one daily dose time.',
-                                                                            toastLength: Toast.LENGTH_SHORT,
-                                                                          );
-                                                                        } else {
-                                                                          Map<String, dynamic> param = new HashMap();
-                                                                          param['name'] = selectedMedicineValue;
-                                                                          param['day'] = _days.text;
-                                                                          param['morning'] = alertValueFirst;
-                                                                          param['afternoon'] = alertValueSecond;
-                                                                          param['night'] = alertValueThird;
-                                                                          listOfMedicine.add(param);
-                                                                          Navigator.pop(context);
-
-                                                                          setState(() {});
-                                                                        }
-                                                                      },
-                                                                    ),
-                                                                  ],
-                                                                );
-                                                              },
-                                                            ),
-                                                          );
-                                                        });
+                                                ),
+                                              if (_canPrescribe)
+                                                ElevatedButton.icon(
+                                                  onPressed: () async {
+                                                    if (_prescriptionSaving)
+                                                      return;
+                                                    if (listOfMedicine.length >=
+                                                        50) {
+                                                      ScaffoldMessenger.of(
+                                                        context,
+                                                      ).showSnackBar(
+                                                        const SnackBar(
+                                                          content: Text(
+                                                            'A prescription supports up to 50 medicines.',
+                                                          ),
+                                                        ),
+                                                      );
+                                                      return;
+                                                    }
+                                                    final entry =
+                                                        await showDialog<
+                                                          Map<String, dynamic>
+                                                        >(
+                                                          context: context,
+                                                          builder: (_) =>
+                                                              Care360MedicineEntryDialog(
+                                                                medicines:
+                                                                    medicineReq,
+                                                              ),
+                                                        );
+                                                    if (!mounted ||
+                                                        entry == null)
+                                                      return;
+                                                    setState(
+                                                      () => listOfMedicine.add(
+                                                        entry,
+                                                      ),
+                                                    );
                                                   },
-                                                  icon: Icon(Icons.add, size: 18),
-                                                  label: Text(getTranslated(context, AppString.add_medicine_button).toString()),
+                                                  icon: Icon(
+                                                    Icons.add,
+                                                    size: 18,
+                                                  ),
+                                                  label: Text(
+                                                    getTranslated(
+                                                      context,
+                                                      AppString
+                                                          .add_medicine_button,
+                                                    ).toString(),
+                                                  ),
                                                   style: ElevatedButton.styleFrom(
-                                                    backgroundColor: loginButton,
+                                                    backgroundColor:
+                                                        loginButton,
                                                     foregroundColor: colorWhite,
                                                     elevation: 0,
-                                                    padding: EdgeInsets.symmetric(vertical: 12, horizontal: 14),
-                                                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                                                    padding:
+                                                        EdgeInsets.symmetric(
+                                                          vertical: 12,
+                                                          horizontal: 14,
+                                                        ),
+                                                    shape: RoundedRectangleBorder(
+                                                      borderRadius:
+                                                          BorderRadius.circular(
+                                                            12,
+                                                          ),
+                                                    ),
                                                   ),
                                                 ),
-                                              ],
+                                            ],
+                                          ),
+                                        ),
+                                        sectionCard(
+                                          child: SingleChildScrollView(
+                                            scrollDirection: Axis.horizontal,
+                                            child: DataTableWidget(
+                                              medicines: listOfMedicine,
+                                              onEdit: (medicine) async {
+                                                if (_prescriptionSaving) return;
+                                                final updated = await showDialog<Map<String, dynamic>>(
+                                                  context: context, builder: (_) => Care360MedicineEntryDialog(
+                                                    medicines: const [], initial: medicine));
+                                                if (!mounted || updated == null || _prescriptionSaving) return;
+                                                final index = listOfMedicine.indexOf(medicine);
+                                                if (index >= 0) setState(() => listOfMedicine[index] = updated);
+                                              },
+                                              onDelete: (medicine) {
+                                                if (_prescriptionSaving) return;
+                                                setState(() {
+                                                  listOfMedicine.remove(
+                                                    medicine,
+                                                  );
+                                                });
+                                              },
                                             ),
                                           ),
-                                          sectionCard(
-                                            child: SingleChildScrollView(
-                                              scrollDirection: Axis.horizontal,
-                                              child: DataTableWidget(
-                                                medicines: listOfMedicine,
-                                                onDelete: (medicine) {
-                                                  setState(() {
-                                                    listOfMedicine.remove(medicine);
-                                                  });
-                                                },
-                                              ),
-                                            ),
-                                          ),
-                                          sectionCard(
-                                            child: SizedBox(
-                                              width: double.infinity,
-                                              child: ElevatedButton(
-                                                  child: Text(
-                                                    getTranslated(context, AppString.generate_pdf_button).toString(),
-                                                    style: TextStyle(color: colorWhite, fontWeight: FontWeight.bold),
-                                                  ),
-                                                  style: ElevatedButton.styleFrom(
-                                                    backgroundColor: loginButton,
-                                                    foregroundColor: colorWhite,
-                                                    elevation: 0,
-                                                    padding: EdgeInsets.symmetric(vertical: 12),
-                                                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                                                  ),
-                                                  onPressed: () async {
-                                                    medicineData.clear();
-                                                    Map<String, dynamic> medicines;
-                                                    for (int i = 0; i < listOfMedicine.length; i++) {
-                                                      medicines = {
-                                                        "medicine": listOfMedicine[i]['name'],
-                                                        "days": listOfMedicine[i]['day'],
-                                                        "morning": listOfMedicine[i]['morning'] == true ? 1 : 0,
-                                                        "afternoon": listOfMedicine[i]['afternoon'] == true ? 1 : 0,
-                                                        "night": listOfMedicine[i]['night'] == true ? 1 : 0
-                                                      };
-                                                      medicineData.add(medicines);
-                                                    }
-
-                                                    var convertMedicine = jsonEncode(medicineData);
-
-                                                    List<Map<String, dynamic>> pdfData = [];
-
-                                                    for (int i = 0; i < listOfMedicine.length; i++) {
-                                                      Map<String, dynamic> mapEducationData = {
-                                                        "medicine": listOfMedicine[i]['name'],
-                                                        "days": listOfMedicine[i]['day'],
-                                                        "morning": listOfMedicine[i]['morning'] == true ? 1 : 0,
-                                                        "afternoon": listOfMedicine[i]['afternoon'] == true ? 1 : 0,
-                                                        "night": listOfMedicine[i]['night'] == true ? 1 : 0
-                                                      };
-                                                      pdfData.add(mapEducationData);
-                                                    }
-
-                                                    if (pdfData.length > 0) {
-                                                      final uploaded = await reportView(
-                                                        this.context, pdfData, id, userId, convertMedicine);
-                                                      if (uploaded && mounted) {
-                                                        // Refresh the server-backed prescription state so a
-                                                        // confirmed upload is not presented as still pending.
-                                                        listOfMedicine.clear();
-                                                        setState(() {
-                                                          appointmentDetail = appointmentDetails();
-                                                        });
-                                                        Fluttertoast.showToast(
-                                                          msg: getTranslated(context, AppString.pdf_generated).toString(),
-                                                          toastLength: Toast.LENGTH_SHORT,
-                                                          gravity: ToastGravity.BOTTOM,
-                                                        );
-                                                      }
-                                                    } else {
-                                                      Fluttertoast.showToast(
-                                                        msg: getTranslated(context, AppString.please_enter_data).toString(),
-                                                        toastLength: Toast.LENGTH_SHORT,
-                                                        gravity: ToastGravity.BOTTOM,
-                                                      );
-                                                    }
-                                                  }),
-                                            ),
-                                          )
-                                        ],
-                                      )
-                                    : Center(
-                                        child: sectionCard(
-                                          margin: EdgeInsets.symmetric(horizontal: width! * 0.18, vertical: height * 0.04),
+                                        ),
+                                        sectionCard(
                                           child: SizedBox(
                                             width: double.infinity,
                                             child: ElevatedButton(
                                               child: Text(
-                                                getTranslated(context, AppString.view_pdf_button).toString(),
-                                                style: TextStyle(fontWeight: FontWeight.bold),
+                                                _prescriptionSaving
+                                                    ? 'Saving prescription…'
+                                                    : getTranslated(
+                                                        context,
+                                                        AppString
+                                                            .generate_pdf_button,
+                                                      ).toString(),
+                                                style: TextStyle(
+                                                  color: colorWhite,
+                                                  fontWeight: FontWeight.bold,
+                                                ),
                                               ),
                                               style: ElevatedButton.styleFrom(
                                                 backgroundColor: loginButton,
                                                 foregroundColor: colorWhite,
                                                 elevation: 0,
-                                                padding: EdgeInsets.symmetric(vertical: 12),
-                                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                                                padding: EdgeInsets.symmetric(
+                                                  vertical: 12,
+                                                ),
+                                                shape: RoundedRectangleBorder(
+                                                  borderRadius:
+                                                      BorderRadius.circular(12),
+                                                ),
                                               ),
-                                              onPressed: _openProtectedPrescription,
+                                              onPressed: _prescriptionSaving
+                                                  ? null
+                                                  : _savePrescription,
                                             ),
                                           ),
                                         ),
-                                      )),
+                                      ],
+                                    )
+                                  : Center(
+                                      child: sectionCard(
+                                        margin: EdgeInsets.symmetric(
+                                          horizontal: width! * 0.18,
+                                          vertical: height * 0.04,
+                                        ),
+                                        child: SizedBox(
+                                          width: double.infinity,
+                                          child: ElevatedButton(
+                                            child: Text(
+                                              getTranslated(
+                                                context,
+                                                AppString.view_pdf_button,
+                                              ).toString(),
+                                              style: TextStyle(
+                                                fontWeight: FontWeight.bold,
+                                              ),
+                                            ),
+                                            style: ElevatedButton.styleFrom(
+                                              backgroundColor: loginButton,
+                                              foregroundColor: colorWhite,
+                                              elevation: 0,
+                                              padding: EdgeInsets.symmetric(
+                                                vertical: 12,
+                                              ),
+                                              shape: RoundedRectangleBorder(
+                                                borderRadius:
+                                                    BorderRadius.circular(12),
+                                              ),
+                                            ),
+                                            onPressed:
+                                                _openProtectedPrescription,
+                                          ),
+                                        ),
+                                      ),
+                                    ),
+                            ),
                           ],
                         ),
                       ),
@@ -1314,21 +1595,26 @@ class _patientDetailsScreenState extends State<patientDetailsScreen> with Ticker
                   ),
                 ),
               );
-              } else {
-                return Center(child: CircularProgressIndicator());
-              }
-            }),
+            } else {
+              return Center(child: CircularProgressIndicator());
+            }
+          },
+        ),
       ),
     );
   }
 
-  Future<BaseModel<DoctorStatusChange>> statusChangeRequest(String status) async {
+  Future<BaseModel<DoctorStatusChange>> statusChangeRequest(
+    String status,
+  ) async {
     Map<String, dynamic> body = {"id": id, "status": status};
 
     DoctorStatusChange response;
 
     try {
-      response = await RestClient(RetroApi().dioData()).doctorStatusChangeRequest(body);
+      response = await RestClient(
+        RetroApi().dioData(),
+      ).doctorStatusChangeRequest(body);
       if (!mounted) {
         return BaseModel()..data = response;
       }
@@ -1390,7 +1676,9 @@ class _patientDetailsScreenState extends State<patientDetailsScreen> with Ticker
         age = data?.age;
         amount = double.tryParse(data?.amount ?? '') ?? 0.0;
         appointmentDateRaw = data?.date ?? '';
-        date = data?.date != null ? DateUtil().formattedDate(DateTime.parse(data!.date!)) : '';
+        date = data?.date != null
+            ? DateUtil().formattedDate(DateTime.parse(data!.date!))
+            : '';
         phoneNo = data?.phoneNo;
         patientAddress = data?.patientAddress;
         illness = data?.illnessInformation;
@@ -1452,24 +1740,22 @@ class _patientDetailsScreenState extends State<patientDetailsScreen> with Ticker
     if (start == null) return false;
     final now = DateTime.now();
     final windowStart = start.subtract(const Duration(minutes: 10));
-    return (now.isAfter(windowStart) || now.isAtSameMomentAs(windowStart)) && now.isBefore(start);
+    return (now.isAfter(windowStart) || now.isAtSameMomentAs(windowStart)) &&
+        now.isBefore(start);
   }
 
   bool get _canComplete {
     if (!_isApproved) return false;
     final start = _getAppointmentStart();
     if (start == null) return false;
-    return DateTime.now().isAfter(start) || DateTime.now().isAtSameMomentAs(start);
+    return DateTime.now().isAfter(start) ||
+        DateTime.now().isAtSameMomentAs(start);
   }
 
   _addVideoOverlay(BuildContext context) {
     OverlayService().addVideosOverlay(
       context,
-      VideoCall(
-        id: userId,
-        callEnd: false,
-        flag: "OutGoing",
-      ),
+      VideoCall(id: userId, callEnd: false, flag: "OutGoing"),
     );
   }
 }
@@ -1479,10 +1765,12 @@ class DataTableWidget extends StatelessWidget {
     super.key,
     required this.medicines,
     required this.onDelete,
+    this.onEdit,
   });
 
   final List<Map<String, dynamic>> medicines;
   final ValueChanged<Map<String, dynamic>> onDelete;
+  final ValueChanged<Map<String, dynamic>>? onEdit;
 
   @override
   Widget build(BuildContext context) {
@@ -1490,12 +1778,39 @@ class DataTableWidget extends StatelessWidget {
       horizontalMargin: 15,
       columnSpacing: 20,
       columns: [
-        DataColumn(label: Text(getTranslated(context, AppString.pdf_medicine_name).toString())),
-        DataColumn(label: Text(getTranslated(context, AppString.information_medicine_days).toString())),
-        DataColumn(label: Text(getTranslated(context, AppString.pdf_medicine_morning).toString())),
-        DataColumn(label: Text(getTranslated(context, AppString.pdf_medicine_afternoon).toString())),
-        DataColumn(label: Text(getTranslated(context, AppString.pdf_medicine_night).toString())),
-        DataColumn(label: Text(getTranslated(context, AppString.pdf_medicine_status).toString())),
+        DataColumn(
+          label: Text(
+            getTranslated(context, AppString.pdf_medicine_name).toString(),
+          ),
+        ),
+        DataColumn(
+          label: Text(
+            getTranslated(
+              context,
+              AppString.information_medicine_days,
+            ).toString(),
+          ),
+        ),
+        DataColumn(
+          label: Text(
+            getTranslated(context, AppString.pdf_medicine_morning).toString(),
+          ),
+        ),
+        DataColumn(
+          label: Text(
+            getTranslated(context, AppString.pdf_medicine_afternoon).toString(),
+          ),
+        ),
+        DataColumn(
+          label: Text(
+            getTranslated(context, AppString.pdf_medicine_night).toString(),
+          ),
+        ),
+        DataColumn(
+          label: Text(
+            getTranslated(context, AppString.pdf_medicine_status).toString(),
+          ),
+        ),
       ],
       rows: medicines
           .map(
@@ -1503,14 +1818,33 @@ class DataTableWidget extends StatelessWidget {
               cells: <DataCell>[
                 DataCell(Text(element["name"].toString())),
                 DataCell(Text(element["day"].toString())),
-                DataCell(element["morning"] == true ? const Icon(Icons.check, size: 20) : const Icon(Icons.clear, size: 20)),
-                DataCell(element["afternoon"] == true ? const Icon(Icons.check, size: 20) : const Icon(Icons.clear, size: 20)),
-                DataCell(element["night"] == true ? const Icon(Icons.check, size: 20) : const Icon(Icons.clear, size: 20)),
-                DataCell(IconButton(
-                  tooltip: 'Remove medicine',
-                  icon: const Icon(Icons.delete_outline, size: 20),
-                  onPressed: () => onDelete(element),
-                )),
+                DataCell(
+                  element["morning"] == true
+                      ? const Icon(Icons.check, size: 20)
+                      : const Icon(Icons.clear, size: 20),
+                ),
+                DataCell(
+                  element["afternoon"] == true
+                      ? const Icon(Icons.check, size: 20)
+                      : const Icon(Icons.clear, size: 20),
+                ),
+                DataCell(
+                  element["night"] == true
+                      ? const Icon(Icons.check, size: 20)
+                      : const Icon(Icons.clear, size: 20),
+                ),
+                DataCell(
+                  Row(mainAxisSize: MainAxisSize.min, children: [
+                    if (onEdit != null) IconButton(tooltip: 'Edit medicine',
+                      icon: const Icon(Icons.edit_outlined, size: 20),
+                      onPressed: () => onEdit!(element)),
+                  IconButton(
+                    tooltip: 'Remove medicine',
+                    icon: const Icon(Icons.delete_outline, size: 20),
+                    onPressed: () => onDelete(element),
+                  ),
+                  ]),
+                ),
               ],
             ),
           )

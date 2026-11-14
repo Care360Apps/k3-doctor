@@ -5,8 +5,11 @@ import '../lib/brand/care360_global_language.dart';
 void main() {
   testWidgets('Language control offers all five languages on a route', (tester) async {
     String? selected;
+    final navigatorKey = GlobalKey<NavigatorState>();
     await tester.pumpWidget(MaterialApp(
+      navigatorKey: navigatorKey,
       home: Scaffold(body: Care360GlobalLanguageSwitch(
+        rootNavigatorKey: navigatorKey,
         onSelect: (code) async { selected = code; },
       )),
     ));
@@ -23,10 +26,13 @@ void main() {
   testWidgets('Language selector opens on a narrow-screen registration route', (tester) async {
     await tester.binding.setSurfaceSize(const Size(320, 640));
     addTearDown(() => tester.binding.setSurfaceSize(null));
+    final navigatorKey = GlobalKey<NavigatorState>();
     await tester.pumpWidget(MaterialApp(
+      navigatorKey: navigatorKey,
       home: Scaffold(body: Stack(children: [
         const Center(child: Text('Sign up')),
         Positioned(bottom: 72, right: 10, child: Care360GlobalLanguageSwitch(
+          rootNavigatorKey: navigatorKey,
           onSelect: (code) async {},
         )),
       ])),

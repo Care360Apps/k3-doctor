@@ -11,7 +11,9 @@ import FirebaseMessaging
     didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?
   ) -> Bool {
     // Initialize Firebase
-    FirebaseApp.configure()
+    if FirebaseApp.app() == nil {
+      FirebaseApp.configure()
+    }
     
     // Request notification permissions
     if #available(iOS 10.0, *) {
@@ -34,10 +36,11 @@ import FirebaseMessaging
   
   override func application(_ application: UIApplication, didRegisterForRemoteNotificationsWithDeviceToken deviceToken: Data) {
     Messaging.messaging().apnsToken = deviceToken
-    print("APNs token received: \(deviceToken.map { String(format: "%.2hhx", $0) }.joined())")
   }
   
   override func application(_ application: UIApplication, didFailToRegisterForRemoteNotificationsWithError error: Error) {
-    print("Failed to register for remote notifications: \(error)")
+    #if DEBUG
+    NSLog("Care360 push registration unavailable; continue without notifications.")
+    #endif
   }
 }

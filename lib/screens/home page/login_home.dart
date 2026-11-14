@@ -1,3 +1,4 @@
+import '../../brand/care360_services_roadmap.dart';
 import 'dart:async';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -22,6 +23,8 @@ import 'package:doctro/screens/videoCall/PhoneScreen.dart';
 import 'package:doctro/screens/auth/SignIn.dart';
 import '../setting/professional_availability.dart';
 import '../../brand/care360_professional_quick_actions.dart';
+import '../../brand/care360_professional_role.dart';
+import '../appointment/doctor_practice_screen.dart';
 import 'package:doctro/screens/subscription/Subscription.dart';
 import 'package:doctro/screens/videoCall/video_Call.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -675,6 +678,15 @@ class _LoginHomeScreenState extends State<LoginHomeScreen> {
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.center,
                                 children: [
+                                  if (Care360ProfessionalRole.canCreatePrescription(SharedPreferenceHelper.getString(Preferences.user_role)))
+                                    Card(margin: const EdgeInsets.all(16), child: ListTile(
+                                      leading: const Icon(Icons.local_hospital_outlined),
+                                      title: const Text('My medical practice'),
+                                      subtitle: const Text('Profile, schedule and clinical consultations'),
+                                      trailing: const Icon(Icons.chevron_right),
+                                      onTap: () => Navigator.push(context, MaterialPageRoute<void>(builder: (_) => const DoctorPracticeScreen())),
+                                    )),
+                                  Card(margin: const EdgeInsets.symmetric(horizontal: 16), child: ListTile(leading: const Icon(Icons.school_outlined), title: const Text('Professional services'), subtitle: const Text('Training & CPD, Workforce and organizations roadmap'), onTap: () => Navigator.push(context, MaterialPageRoute<void>(builder: (_) => const Care360ServicesRoadmap(professional: true))))),
                                   Care360ProfessionalQuickActions(
                                     onOpen: (destination) {
                                       switch (destination) {

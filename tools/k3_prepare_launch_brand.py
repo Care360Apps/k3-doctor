@@ -32,7 +32,18 @@ def main() -> None:
                 f"WARNING: Care360 master is only {image.width}x{image.height}; "
                 "native splash may look soft on high-density displays."
             )
-        image.save(TARGET, format="PNG", optimize=True)
+        from PIL import ImageDraw
+        # Clip only the white square outside the approved circular mark.
+        # Supersampling smooths the edge without changing interior artwork.
+        mask = Image.new("L", (image.width * 4, image.height * 4), 0)
+        ImageDraw.Draw(mask).ellipse((0, 0, mask.width - 1, mask.height - 1), fill=255)
+        mask = mask.resize(image.size, Image.Resampling.LANCZOS)
+        image.putalpha(mask)
+        normal = image.resize((576, 576), Image.Resampling.LANCZOS)
+        normal.save(TARGET, format="PNG", optimize=True)
+        android12 = Image.new("RGBA", (960, 960), (0, 0, 0, 0))
+        android12.alpha_composite(image.resize((632, 632), Image.Resampling.LANCZOS), (164, 164))
+        android12.save(TARGET.with_name("care360_splash_android12.png"), format="PNG", optimize=True)
 
     print(f"Prepared native splash from official logo: {TARGET}")
 
