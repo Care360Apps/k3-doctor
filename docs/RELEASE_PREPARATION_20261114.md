@@ -1,4 +1,4 @@
-# Care360 V1 production preparation — 14 November 2026
+# Care360 V1 production preparation â€” 14 November 2026
 
 This integrated source candidate is for coordinated review across Patient, Plus and backend. It is not a deployment or store approval. Older stacked pull requests must not be merged independently merely because this candidate is available.
 
@@ -21,3 +21,11 @@ Approve and publish recruitment/training privacy notices, retention/deletion pro
 Run healthcare, recruitment, training, payment and failure journeys on the coordinated production-configured staging release. Complete medical-file cutover/security assessment, account deletion/session/Firebase acceptance and operational backup/rollback checks. Validate current store privacy, Data safety/health declarations, support/deletion URLs, reviewer access and screenshots against actual deployed behavior.
 
 The developer will provide production setup. No production deployment or public store publishing has been performed. Final public release requires owner approval after evidence is reviewed.
+
+## Plus iOS preflight added 15 November 2026
+
+`tools/k3_ios_release_preflight.py` now checks the existing Plus bundle identity, build-number increase, production HTTPS API, native permission descriptions, production push entitlement, iOS 15 source baseline, approved production Firebase client, matching private Runner plist, configured Apple team, Xcode 26+ and an iOS device SDK 26+. Run it on the authorized Mac after installing dependencies and privately configuring signing/client files, before producing an App Store archive. It does not build, sign, upload or prove device behavior.
+
+Set K3_BUILD_ENV=production, K3_API_BASE_URL, K3_IOS_LATEST_BUILD_NUMBER, K3_IOS_NEXT_BUILD_NUMBER, K3_IOS_DEVELOPMENT_TEAM, K3_IOS_FIREBASE_PLIST_PATH and K3_PRODUCTION_FIREBASE_PROJECT_ID through the private build environment. Copy the approved client plist to the ignored ios/Runner/GoogleService-Info.plist; both client configurations must match. The helper deliberately blocks missing setup. It is designed for an existing listing: confirm existing-versus-first-listing status and build numbering with App Store Connect rather than inventing a previous build number.
+
+Plus does not need Patient's native Maps xcconfig gate because the audited Plus source does not instantiate that native GoogleMap integration. Existing native notification prompt behavior is preserved and still requires actual iOS device/UX acceptance. Current source checks and offline fixtures do not establish a successful iOS archive, signing/provisioning ownership or store readiness.
