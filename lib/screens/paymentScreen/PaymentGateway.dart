@@ -1,3 +1,4 @@
+import '../../payments/care360_paystack_client.dart';
 import 'dart:convert';
 import 'package:doctro/constant/app_string.dart';
 import 'package:doctro/constant/color_constant.dart';
@@ -566,8 +567,7 @@ class _PaymentGatewayScreenState extends State<PaymentGatewayScreen> {
           flutterWaveKey = response.data!.flutterwaveKey;
         });
       }
-    } catch (error, stacktrace) {
-      print("Exception occur: $error stackTrace: $stacktrace");
+    } catch (error) {
       return BaseModel()..setException(ServerError.withError(error: error));
     }
     return BaseModel()..data = response;
@@ -609,8 +609,7 @@ class _PaymentGatewayScreenState extends State<PaymentGatewayScreen> {
         Navigator.pushNamed(context, "loginHome");
         Fluttertoast.showToast(gravity: ToastGravity.BOTTOM, msg: getTranslated(context, AppString.payment_success).toString());
       });
-    } catch (error, stacktrace) {
-      print("Exception occur: $error stackTrace: $stacktrace");
+    } catch (error) {
       return BaseModel()..setException(ServerError.withError(error: error));
     }
     return BaseModel()..data = response;
@@ -635,7 +634,6 @@ class _PaymentGatewayScreenState extends State<PaymentGatewayScreen> {
     if (response.transactionId!.isNotEmpty) {
       setState(() {
         aPaymentToken = response.transactionId;
-        print("dsd ${response.transactionId}");
         aPaymentToken != "" ? purchaseSubscriptions() : Fluttertoast.showToast(gravity: ToastGravity.BOTTOM, msg: getTranslated(context, AppString.payment_not_complete).toString(), toastLength: Toast.LENGTH_SHORT);
       });
     }
@@ -643,7 +641,11 @@ class _PaymentGatewayScreenState extends State<PaymentGatewayScreen> {
 
   /// payStack payment ///
 
-  payStackFunction() async {
+  bool _paystackSubmitting = false;
+  Future<void> payStackFunction() async {
+    if (_paystackSubmitting) return;
+    _paystackSubmitting = true;
+    try {
     if (!_isPaystackReady) {
       await _initializePaystack();
     }
@@ -651,18 +653,17 @@ class _PaymentGatewayScreenState extends State<PaymentGatewayScreen> {
       Fluttertoast.showToast(gravity: ToastGravity.BOTTOM, msg: getTranslated(context, AppString.payment_not_complete).toString(), toastLength: Toast.LENGTH_SHORT);
       return;
     }
-    String? peMail = SharedPreferenceHelper.getString(Preferences.email);
     var parseData = json.decode(plan!);
-    int amountToPaystack = (num.parse("${parseData[value]['price']}") * 100).round();
-    final accessCode = await _createPaystackAccessCode(amountToPaystack, peMail ?? "");
-    if (accessCode == null || accessCode.isEmpty) {
+    final amountToPaystack = num.parse("${parseData[value]['price']}");
+    final session = await _createPaystackSession(amountToPaystack);
+    if (session == null) {
       Fluttertoast.showToast(gravity: ToastGravity.BOTTOM, msg: getTranslated(context, AppString.payment_not_complete).toString(), toastLength: Toast.LENGTH_SHORT);
       return;
     }
-    final response = await _paystack.launch(accessCode);
-    if (response.status == "success") {
-      paymentToken = response.reference;
-      aPaymentToken = response.reference;
+    final response = await _paystack.launch(session.accessCode);
+    if (response.status == "success" && response.reference == session.reference) {
+      paymentToken = session.reference;
+      aPaymentToken = session.reference;
       aPaymentToken != "" ? purchaseSubscriptions() : Fluttertoast.showToast(gravity: ToastGravity.BOTTOM, msg: getTranslated(context, AppString.payment_not_complete).toString(), toastLength: Toast.LENGTH_SHORT);
       setState(() {
         paymentToken = response.reference;
@@ -670,41 +671,29 @@ class _PaymentGatewayScreenState extends State<PaymentGatewayScreen> {
     } else {
       Fluttertoast.showToast(gravity: ToastGravity.BOTTOM, msg: response.message, toastLength: Toast.LENGTH_SHORT);
     }
+  
+    } catch (_) {
+      Fluttertoast.showToast(msg: getTranslated(context, AppString.payment_not_complete).toString());
+    } finally { _paystackSubmitting = false; }
   }
 
-  Future<String?> _createPaystackAccessCode(int amount, String email) async {
+  Future<Care360PaystackSession?> _createPaystackSession(num amount) async {
     try {
-      final dio = RetroApi().dioData();
-      final response = await dio.post(
-        '${Apis.baseUrl}paystack_init',
-        data: {
-          "amount": amount,
-          "email": email,
-          "currency": SharedPreferenceHelper.getString(Preferences.currency_code),
-        },
-      );
-      final data = response.data;
-      if (data is Map && data['success'] == true) {
-        final payload = data['data'];
-        if (payload is Map && payload['access_code'] != null) {
-          return payload['access_code'].toString();
-        }
-      }
-    } catch (error) {
-      Fluttertoast.showToast(
-        gravity: ToastGravity.BOTTOM,
-        msg: getTranslated(context, AppString.payment_not_complete).toString(),
-        toastLength: Toast.LENGTH_SHORT,
-      );
+      final currency = SharedPreferenceHelper.getString(Preferences.currency_code);
+      if (currency == null) return null;
+      final session = await Care360PaystackClient(RetroApi().dioData(),
+        apiBase: Uri.parse(Apis.baseUrl)).initialize(amount: amount, currency: currency.toUpperCase());
+      return session;
+    } catch (_) {
+      Fluttertoast.showToast(msg: getTranslated(context, AppString.payment_not_complete).toString());
+      return null;
     }
-    return null;
   }
 
   // RazorPay Success Method //
 
   void _handlePaymentSuccess(PaymentSuccessResponse response) {
     aPaymentToken = response.paymentId;
-    print(response.paymentId);
     aPaymentToken != "" ? purchaseSubscriptions() : Fluttertoast.showToast(msg: getTranslated(context, AppString.payment_not_complete).toString(), toastLength: Toast.LENGTH_SHORT);
   }
 
