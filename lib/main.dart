@@ -36,6 +36,8 @@ import 'constant/prefConstatnt.dart';
 import 'localization/localization_constant.dart';
 import 'localization/localization_constant.dart' as care360_locale;
 import 'brand/care360_global_language.dart';
+import 'brand/care360_first_language.dart';
+import 'localization/care360_framework_locale_fallback.dart';
 import 'screens/auth/signup.dart';
 import 'screens/auth/phoneverification.dart';
 import 'screens/home page/login_home.dart';
@@ -130,8 +132,8 @@ class MyApp extends StatefulWidget {
   _MyAppState createState() => _MyAppState();
 
   static void setLocale(BuildContext context, Locale newLocale) {
-    _MyAppState state = context.findAncestorStateOfType<_MyAppState>()!;
-    state.setLocale(newLocale);
+    final state = context.findAncestorStateOfType<_MyAppState>();
+    if (state != null && state.mounted) state.setLocale(newLocale);
   }
 
 }
@@ -297,13 +299,14 @@ class _MyAppState extends State<MyApp> {
     });
   }
 
+  @override
   void didChangeDependencies() {
-    getLocale().then((local) => {
-      setState(() {
-        this._locale = local;
-      })
-    });
     super.didChangeDependencies();
+    // Saved language is read asynchronously. Never set state after logout
+    // or route disposal, and don't report optional preference failures.
+    getLocale().then((local) {
+      if (mounted && _locale == null) setState(() => _locale = local);
+    }).catchError((Object _) {});
   }
 
   Widget build(BuildContext context) {
@@ -377,11 +380,11 @@ class _MyAppState extends State<MyApp> {
                 Locale(FRENCH, 'FR'),
                 Locale(ARABIC, 'AE'),
               ],
-              localizationsDelegates: [
+              localizationsDelegates: const [
                 LanguageLocalization.delegate,
-                GlobalMaterialLocalizations.delegate,
-                GlobalWidgetsLocalizations.delegate,
-                GlobalCupertinoLocalizations.delegate,
+                Care360MaterialFallbackDelegate(),
+                Care360WidgetsFallbackDelegate(),
+                Care360CupertinoFallbackDelegate(),
               ],
               localeResolutionCallback: (deviceLocal, supportedLocales) {
                 for (var local in supportedLocales) {
@@ -394,9 +397,43 @@ class _MyAppState extends State<MyApp> {
               },
               initialRoute: SharedPreferenceHelper.getBoolean(Preferences.is_logged_in) == true
                   ? 'loginHome'
-                  : (SharedPreferenceHelper.getBoolean(Preferences.onboarding_seen) ? 'SignIn' : 'Onboarding'),
-              theme: ThemeData(useMaterial3: false,),
+                  : (SharedPreferenceHelper.getBoolean(Preferences.onboarding_seen)
+                      ? 'SignIn'
+                      : 'FirstLanguage'),
+              theme: ThemeData(
+                useMaterial3: false,
+                scaffoldBackgroundColor: const Color(0xFFF5F8F7),
+                primaryColor: const Color(0xFF123E4D),
+                colorScheme: ColorScheme.fromSeed(
+                  seedColor: const Color(0xFF087D76),
+                  brightness: Brightness.light,
+                ),
+                appBarTheme: const AppBarTheme(
+                  backgroundColor: Color(0xFF123E4D),
+                  foregroundColor: Colors.white,
+                ),
+                elevatedButtonTheme: ElevatedButtonThemeData(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF087D76),
+                    foregroundColor: Colors.white,
+                    minimumSize: const Size(48, 48),
+                  ),
+                ),
+              ),
               routes: {
+                'FirstLanguage': (routeContext) => Care360FirstLanguageScreen(
+                  initialLanguage: effectiveLocale.languageCode,
+                  onContinue: (code) async {
+                    // Preserve existing Doctor/Provider session logic.
+                    // Only first-time users are routed through this screen.
+                    final selected = await care360_locale.setLocale(code);
+                    if (!routeContext.mounted) return;
+                    final navigator = Navigator.of(routeContext);
+                    setLocale(selected);
+                    if (!routeContext.mounted) return;
+                    navigator.pushReplacementNamed('Onboarding');
+                  },
+                ),
                 'SignIn': (context) => SignIn(),
                 'signup': (context) => CreateAccount(),
                 'ForgotPasswordScreen': (context) => ForgotPasswordScreen(),

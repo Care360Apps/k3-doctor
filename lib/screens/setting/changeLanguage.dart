@@ -188,8 +188,18 @@ class _ChangeLanguageState extends State<ChangeLanguage> {
                                   if (!mounted) return;
                                   await SharedPreferenceHelper.setString(
                                     Preferences.language_name, language.name);
-                                  MyApp.setLocale(context, locale);
-                                  Navigator.pop(context);
+                                  if (!mounted) return;
+                                  final root = navigatorKey.currentState;
+                                  if (root == null || !root.mounted) return;
+                                  final rootContext = root.context;
+                                  final exiting = ModalRoute.of(context);
+                                  Navigator.of(context).pop();
+                                  // A still-popping route can trigger Flutter
+                                  // localization/Overlay assertions on rebuild.
+                                  await exiting?.completed;
+                                  if (root.mounted) {
+                                    MyApp.setLocale(rootContext, locale);
+                                  }
                                 },
                                 title: Text(Language.languageList()[index].name),
                               )),

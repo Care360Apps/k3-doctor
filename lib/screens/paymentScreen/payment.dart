@@ -681,7 +681,17 @@ class _PaymentScreen extends State<PaymentScreen> {
   }
 
   Future<void> logoutUser() async {
-    SharedPreferenceHelper.clearPref();
+    try {
+      await SharedPreferenceHelper.clearPrefSecurely();
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content: Text('Unable to finish signing out. Please try again.'),
+        ));
+      }
+      return;
+    }
+    if (!mounted) return;
     Navigator.pushAndRemoveUntil(context, MaterialPageRoute(builder: (BuildContext context) => SignIn()), ModalRoute.withName('SignIn'));
   }
 

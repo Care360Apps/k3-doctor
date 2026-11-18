@@ -629,17 +629,23 @@ class _WithdrawalScreenState extends State<WithdrawalScreen> {
         _t(AppString.logout_button, 'Logout'),
         style: TextStyle(color: hintColor),
       ),
-      onPressed: () {
-        CommonFunction.checkNetwork().then((value) {
-          if (value == true) {
-            SharedPreferenceHelper.clearPref();
+      onPressed: () async {
+        try {
+          await SharedPreferenceHelper.clearPrefSecurely();
+        } catch (_) {
+          if (context.mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+              content: Text('Unable to finish signing out. Please try again.'),
+            ));
+          }
+          return;
+        }
+        if (!context.mounted) return;
             Navigator.pushAndRemoveUntil(
               context,
               MaterialPageRoute(builder: (BuildContext context) => SignIn()),
               ModalRoute.withName('SignIn'),
             );
-          }
-        });
       },
     );
     showDialog(

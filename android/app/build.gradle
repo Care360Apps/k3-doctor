@@ -16,7 +16,7 @@ if (keystorePropertiesFile.exists()) {
 
 android {
     namespace "com.cnu.doctor"
-    compileSdk flutter.compileSdkVersion
+    compileSdk 36
     ndkVersion flutter.ndkVersion
 
     compileOptions {
@@ -37,7 +37,7 @@ android {
     defaultConfig {
         applicationId "com.cnu.doctor"
         minSdk 24
-        targetSdk flutter.targetSdkVersion
+        targetSdk 36
         versionCode flutter.versionCode
         versionName flutter.versionName
     }

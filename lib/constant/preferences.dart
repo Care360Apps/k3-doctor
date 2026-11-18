@@ -1,5 +1,6 @@
 import 'package:doctro/constant/prefConstatnt.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 class SharedPreferenceHelper {
@@ -28,17 +29,24 @@ class SharedPreferenceHelper {
         value = await _secureStorage.read(key: key);
       } catch (_) {}
       final legacy = _preferences!.getString(key);
-      if ((value == null || value.isEmpty) && legacy != null && legacy.isNotEmpty && legacy != 'N_A') {
-        value = legacy;
+      if ((value == null || value.isEmpty) &&
+          legacy != null && legacy.isNotEmpty && legacy != 'N_A') {
+        // Migration is only successful after durable keystore persistence.
+        // Never trust a plaintext legacy token when secure storage fails.
         try {
-          await _secureStorage.write(key: key, value: value);
-        } catch (_) {}
+          await _secureStorage.write(key: key, value: legacy);
+          value = legacy;
+        } catch (_) {
+          value = null;
+        }
       }
       if (legacy != null) {
         await _preferences!.remove(key);
       }
       if (value != null && value.isNotEmpty) {
         _secureCache[key] = value;
+      } else {
+        _secureCache.remove(key);
       }
     }
     return _preferences;
@@ -56,10 +64,10 @@ class SharedPreferenceHelper {
       throw StateError('Storing a password in SharedPreferences is prohibited.');
     }
     if (_secureKeys.contains(key)) {
+      // Never claim a successful login if keystore/keychain persistence fails.
+      // Do not fall back to plaintext app preferences.
+      await _secureStorage.write(key: key, value: value);
       _secureCache[key] = value;
-      try {
-        await _secureStorage.write(key: key, value: value);
-      } catch (_) {}
       return true;
     }
     return await _preferences!.setString(key, value);
@@ -87,18 +95,39 @@ class SharedPreferenceHelper {
   //deletes..
   static Future<bool> remove(String key) async {
     if (_secureKeys.contains(key)) {
+      // Do not report success if a revoked credential remains on disk.
+      // Retain the in-memory token until deletion succeeds so callers can
+      // distinguish an incomplete sign-out from a completed one.
+      await _secureStorage.delete(key: key);
       _secureCache.remove(key);
-      try {
-        await _secureStorage.delete(key: key);
-      } catch (_) {}
       return true;
     }
     return await _preferences!.remove(key);
   }
 
+  /// Await secure logout before navigating to a different account.
+  static Future<void> clearPrefSecurely() async {
+    // Revoke the durable credential before clearing the in-memory copy.
+    // If keychain deletion fails, surface the error rather than reporting
+    // a successful logout while a reusable token remains on disk.
+    await _secureStorage.delete(key: Preferences.auth_token);
+    _secureCache.remove(Preferences.auth_token);
+    try {
+      // Chat/Firestore must not remain signed in as the previous clinician.
+      await FirebaseAuth.instance.signOut();
+    } finally {
+      // Clear cached profile/role information even when Firebase sign-out
+      // fails, but preserve that failure for the caller to handle.
+      await _preferences!.clear();
+    }
+  }
+
+  /// Deprecated legacy API. Callers should await clearPrefSecurely() so
+  /// navigation cannot race with credential and Firebase session deletion.
+  @Deprecated('Use await clearPrefSecurely() for reliable logout.')
   static void clearPref() {
-    _preferences!.clear();
-    _secureCache.clear();
-    _secureStorage.deleteAll().catchError((_) {});
+    // Preserve legacy call-site compatibility until every caller is audited.
+    // A synchronous void method cannot guarantee logout completion.
+    clearPrefSecurely();
   }
 }

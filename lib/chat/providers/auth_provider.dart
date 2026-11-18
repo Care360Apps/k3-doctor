@@ -1,7 +1,6 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:doctro/chat/constants/firestore_constants.dart';
 import 'package:flutter/foundation.dart';
-import 'package:doctro/chat/models/user_chat.dart';
 import 'package:doctro/constant/prefConstatnt.dart';
 import 'package:doctro/constant/preferences.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -31,107 +30,13 @@ class AuthProvider extends ChangeNotifier {
     return prefs.getString(FirestoreConstants.id);
   }
   bool check = false;
+  /// Legacy clinician-password Firebase account creation is disabled.
+  /// Only the Laravel-issued Firebase custom token may authorize clinical chat.
+  @Deprecated('Use signInWithCustomToken with a backend-issued token.')
   Future<bool> handleSignIn({String? email, String? password}) async {
-    if (email == null || email.isEmpty || password == null || password.isEmpty) {
-      return false;
-    }
-
-    _status = Status.authenticating;
-
+    _status = Status.authenticateError;
     notifyListeners();
-
-    try {
-      User? user = (await _auth.createUserWithEmailAndPassword(
-        email: email,
-        password: password,
-      ))
-          .user;
-      if (user != null) {
-        final QuerySnapshot result = await firebaseFirestore.collection(FirestoreConstants.pathUserCollection).where(FirestoreConstants.id, isEqualTo: user.uid).get();
-        final List<DocumentSnapshot> documents = result.docs;
-        if (documents.length == 0) {
-          firebaseFirestore.collection(FirestoreConstants.pathUserCollection).doc(user.uid).set({
-            FirestoreConstants.nickname: SharedPreferenceHelper.getString(Preferences.user_name),
-            FirestoreConstants.photoUrl: SharedPreferenceHelper.getString(Preferences.chat_profile),
-            FirestoreConstants.userType: "doctor",
-            FirestoreConstants.doctorId: SharedPreferenceHelper.getString(Preferences.doctorId),
-            FirestoreConstants.id: user.uid,
-            'createdAt': DateTime.now().millisecondsSinceEpoch.toString(),
-            FirestoreConstants.chattingWith: null
-          });
-
-          User? currentUser = user;
-          await prefs.setString(FirestoreConstants.id, currentUser.uid);
-          await prefs.setString(FirestoreConstants.nickname, currentUser.displayName ?? "");
-          await prefs.setString(FirestoreConstants.photoUrl, currentUser.photoURL ?? "");
-        } else {
-          DocumentSnapshot documentSnapshot = documents[0];
-          UserChat userChat = UserChat.fromDocument(documentSnapshot);
-          await prefs.setString(FirestoreConstants.id, userChat.id);
-          await prefs.setString(FirestoreConstants.nickname, userChat.nickname);
-          await prefs.setString(FirestoreConstants.photoUrl, userChat.photoUrl);
-          await prefs.setString(FirestoreConstants.shopId, userChat.shopId);
-          await prefs.setString(FirestoreConstants.userType, userChat.userType);
-          await prefs.setString(Preferences.doctorId, userChat.doctorId);
-        }
-        _status = Status.authenticated;
-        notifyListeners();
-        return check = true;
-      } else {
-        _status = Status.authenticateError;
-        notifyListeners();
-        return check = false;
-      }
-    } on FirebaseAuthException catch (signUpError) {
-      if (signUpError.code == 'ERROR_EMAIL_ALREADY_IN_USE' || signUpError.code == "email-already-in-use") {
-        User? user = (await _auth.signInWithEmailAndPassword(
-          email: email,
-          password: password,
-        ))
-            .user;
-        if (user != null) {
-          final QuerySnapshot result = await firebaseFirestore.collection(FirestoreConstants.pathUserCollection).where(FirestoreConstants.id, isEqualTo: user.uid).get();
-          final List<DocumentSnapshot> documents = result.docs;
-          if (documents.length == 0) {
-            firebaseFirestore.collection(FirestoreConstants.pathUserCollection).doc(user.uid).set({
-              FirestoreConstants.nickname: SharedPreferenceHelper.getString(Preferences.user_name),
-              FirestoreConstants.photoUrl: SharedPreferenceHelper.getString(Preferences.chat_profile),
-              FirestoreConstants.userType: "doctor",
-              FirestoreConstants.doctorId: SharedPreferenceHelper.getString(Preferences.doctorId),
-              FirestoreConstants.id: user.uid,
-              'createdAt': DateTime.now().millisecondsSinceEpoch.toString(),
-              FirestoreConstants.chattingWith: null
-            });
-
-            User? currentUser = user;
-            await prefs.setString(FirestoreConstants.id, currentUser.uid);
-            await prefs.setString(FirestoreConstants.nickname, currentUser.displayName ?? "");
-            await prefs.setString(FirestoreConstants.photoUrl, currentUser.photoURL ?? "");
-          } else {
-            DocumentSnapshot documentSnapshot = documents[0];
-            UserChat userChat = UserChat.fromDocument(documentSnapshot);
-
-            await prefs.setString(FirestoreConstants.id, userChat.id);
-            await prefs.setString(FirestoreConstants.nickname, userChat.nickname);
-            await prefs.setString(FirestoreConstants.photoUrl, userChat.photoUrl);
-            await prefs.setString(FirestoreConstants.shopId, userChat.shopId);
-            await prefs.setString(FirestoreConstants.userType, userChat.userType);
-            await prefs.setString(FirestoreConstants.doctorId, userChat.doctorId);
-          }
-
-          _status = Status.authenticated;
-          notifyListeners();
-
-          return check = true;
-        } else {
-          _status = Status.authenticateError;
-          notifyListeners();
-          return check = false;
-        }
-      } else {
-        return check = false;
-      }
-    }
+    return false;
   }
 
   Future<void> handleSignOut() async {

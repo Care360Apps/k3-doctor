@@ -22,13 +22,13 @@ class Care360MasterBrand extends StatelessWidget {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Image.asset(
+          ClipOval(child: Image.asset(
             'assets/images/care360_master_logo.webp',
             width: logoSize,
             height: logoSize,
             fit: BoxFit.contain,
             excludeFromSemantics: true,
-          ),
+          )),
           const SizedBox(height: 5),
           Text(
             'Care360 Plus',

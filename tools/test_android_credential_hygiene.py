@@ -24,6 +24,12 @@ else:
     assert "getString(Preferences.password)" not in auth
     assert "await _preferences!.remove(Preferences.password);" in prefs
     assert "if (key == Preferences.password)" in prefs
-    assert "handleSignIn(email: email.text, password: password.text)" in sign_in
+    # Clinical Firebase identities must be minted by the backend, never
+    # registered using the clinician's Laravel account password.
+    assert "handleSignIn(email: email.text, password: password.text)" not in sign_in
+    assert "createUserWithEmailAndPassword(" not in auth
+    assert "signInWithEmailAndPassword(" not in auth
+    assert "signInWithCustomToken(" in sign_in
+    assert "await FirebaseAuth.instance.signOut();" in prefs
 
 print("PASS: Android password persistence guard is active.")

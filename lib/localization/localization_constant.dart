@@ -4,7 +4,7 @@ import 'package:flutter/material.dart';
 import 'language_localization.dart';
 
 String? getTranslated(BuildContext context, String key) {
-  return LanguageLocalization.of(context)!.getTranslateValue(key);
+  return LanguageLocalization.of(context)?.getTranslateValue(key) ?? key;
 }
 
 const String ENGLISH = "en";
@@ -15,7 +15,7 @@ const String FRENCH = "fr";
 const String ARABIC = "ar";
 
 Future<Locale> setLocale(String languageCode) async {
-  SharedPreferenceHelper.setString(Preferences.current_language_code, languageCode);
+  await SharedPreferenceHelper.setString(Preferences.current_language_code, languageCode);
   return _locale(languageCode);
 }
 

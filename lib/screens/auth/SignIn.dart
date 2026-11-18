@@ -387,8 +387,8 @@ class _SignInState extends State<SignIn> {
     setState(() => _loginInProgress = true);
     Map<String, dynamic> body = {"email": email.text, "password": password.text, "device_token": SharedPreferenceHelper.getString(Preferences.device_token)};
 
-    SharedPreferenceHelper.setString(Preferences.user_email, email.text);
-    // Never store the clinician password in plain application preferences.
+    // Do not persist an unverified clinician identity before Laravel accepts
+    // the login. Never store the clinician password in app preferences.
 
     Login response;
 
@@ -402,37 +402,43 @@ class _SignInState extends State<SignIn> {
       CommonFunction.hideDialog(context);
 
       if (response.success == true) {
-        SharedPreferenceHelper.setString(Preferences.auth_token, response.data!.token!);
-        SharedPreferenceHelper.setString(Preferences.name, response.data!.name!);
-        SharedPreferenceHelper.setString(Preferences.phone_no, response.data!.phone!);
-        SharedPreferenceHelper.setString(Preferences.email, response.data!.email!);
-        SharedPreferenceHelper.setString(Preferences.image, response.data!.image!);
-        SharedPreferenceHelper.setString(Preferences.user_role, _loginAsProvider ? 'provider' : 'doctor');
-        SharedPreferenceHelper.setInt(Preferences.is_filled, response.data!.isFilled!);
-        SharedPreferenceHelper.setBoolean(Preferences.is_logged_in, true);
+        final issuedToken = response.data?.token?.trim();
+        if (issuedToken == null || issuedToken.isEmpty ||
+            issuedToken == 'N_A' || issuedToken == 'null') {
+          throw StateError('Missing secure session token');
+        }
+        await SharedPreferenceHelper.setString(Preferences.auth_token, issuedToken);
+        await SharedPreferenceHelper.setString(Preferences.user_email, email.text);
+        if (!mounted) return BaseModel()..data = response;
+        await SharedPreferenceHelper.setString(Preferences.name, response.data!.name ?? '');
+        await SharedPreferenceHelper.setString(Preferences.phone_no, response.data!.phone ?? '');
+        await SharedPreferenceHelper.setString(Preferences.email, response.data!.email ?? email.text);
+        await SharedPreferenceHelper.setString(Preferences.image, response.data!.image ?? '');
+        await SharedPreferenceHelper.setString(Preferences.user_role, _loginAsProvider ? 'provider' : 'doctor');
+        await SharedPreferenceHelper.setInt(Preferences.is_filled, response.data!.isFilled ?? 0);
         if (response.data!.approvalStatus != null) {
-          SharedPreferenceHelper.setString(Preferences.approval_status, response.data!.approvalStatus!);
+          await SharedPreferenceHelper.setString(Preferences.approval_status, response.data!.approvalStatus!);
         }
 
         if (response.data!.subscriptionStatus == null) {
-          SharedPreferenceHelper.setInt(Preferences.subscription_status, -1);
+          await SharedPreferenceHelper.setInt(Preferences.subscription_status, -1);
         } else {
-          SharedPreferenceHelper.setInt(Preferences.subscription_status, response.data!.subscriptionStatus!);
+          await SharedPreferenceHelper.setInt(Preferences.subscription_status, response.data!.subscriptionStatus!);
         }
-        Navigator.pushReplacementNamed(context, 'loginHome');
-        Fluttertoast.showToast(
-          msg: response.msg!,
-          toastLength: Toast.LENGTH_SHORT,
-          gravity: ToastGravity.BOTTOM,
-        );
+        await SharedPreferenceHelper.setString(
+            Preferences.chat_profile, response.data!.fullImage ?? '');
+        await SharedPreferenceHelper.setString(
+            Preferences.user_name, response.data!.name ?? '');
+        await SharedPreferenceHelper.setString(
+            Preferences.doctorId, response.data!.id.toString());
 
-        SharedPreferenceHelper.setString(Preferences.chat_profile, response.data!.fullImage!);
-        SharedPreferenceHelper.setString(Preferences.user_name, response.data!.name!);
-        SharedPreferenceHelper.setString(Preferences.doctorId, response.data!.id.toString());
+        // Mark login complete only after role, profile and appointment identity
+        // are persisted. This prevents a partially initialized session.
+        await SharedPreferenceHelper.setBoolean(Preferences.is_logged_in, true);
 
-        // Sign into Firebase using backend-issued custom token (stronger identity).
-        // Falls back to the legacy email/password path if the token is missing
-        // or if sign-in with the custom token fails (e.g. wrong service account project).
+        // Only backend-issued Firebase custom tokens may grant clinician chat.
+        // Reusing the professional password to create a Firebase identity could
+        // misidentify Providers as Doctors and bypass correct account linkage.
         final fbToken = response.data!.firebaseCustomToken;
         bool fbSignedIn = false;
         if (fbToken != null && fbToken.isNotEmpty) {
@@ -447,8 +453,22 @@ class _SignInState extends State<SignIn> {
           } catch (_) {}
         }
         if (!fbSignedIn) {
-          authProvider.handleSignIn(email: email.text, password: password.text);
+          // Keep clinical REST login available, but fail chat closed if the
+          // backend custom token is absent/invalid. Never reuse passwords.
+          try {
+            await authProvider.handleSignOut();
+          } catch (_) {
+            // Chat stays unavailable until an authenticated Firebase session
+            // can be established; do not synthesize a new account.
+          }
         }
+        if (!mounted) return BaseModel()..data = response;
+        Navigator.pushReplacementNamed(context, 'loginHome');
+        Fluttertoast.showToast(
+          msg: response.msg ?? 'Signed in.',
+          toastLength: Toast.LENGTH_SHORT,
+          gravity: ToastGravity.BOTTOM,
+        );
       } else {
         if (response.data != null && response.data!.verify == 0) {
           final data = OtpData(otp: response.data!.otp, id: response.data!.id);
