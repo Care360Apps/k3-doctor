@@ -24,6 +24,7 @@ class Care360MedicalPdfClient {
   final bool _ownsClient;
 
   static const maxPdfBytes = 10 * 1024 * 1024;
+  static const networkTimeout = Duration(seconds: 30);
 
   Uri privatePrescriptionUri(int appointmentId) {
     if (appointmentId <= 0) {
@@ -87,7 +88,7 @@ class Care360MedicalPdfClient {
       request.headers['Authorization'] = 'Bearer $token';
     }
 
-    final response = await _client.send(request);
+    final response = await _client.send(request).timeout(networkTimeout);
     if (response.statusCode != 200) {
       throw const MedicalPdfException(
           'Prescription unavailable. Please refresh or contact support.');
@@ -100,7 +101,7 @@ class Care360MedicalPdfClient {
 
     final bytes = BytesBuilder(copy: false);
     var total = 0;
-    await for (final part in response.stream) {
+    await for (final part in response.stream.timeout(networkTimeout)) {
       total += part.length;
       if (total > maxPdfBytes) {
         throw const MedicalPdfException('Prescription exceeds the file limit.');
