@@ -16,6 +16,9 @@ import 'package:doctro/constant/app_string.dart';
 import 'package:doctro/constant/color_constant.dart';
 import 'package:doctro/localization/localization_constant.dart';
 import 'package:doctro/pdf_creation/report_pdf.dart';
+import 'package:doctro/retrofit/apis.dart';
+import 'package:doctro/security/care360_medical_pdf_client.dart';
+import 'package:doctro/security/care360_protected_pdf_viewer.dart';
 import 'package:doctro/retrofit/server_error.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -123,6 +126,38 @@ class _patientDetailsScreenState extends State<patientDetailsScreen> with Ticker
   void dispose() {
     _days.dispose();
     super.dispose();
+  }
+
+  Future<void> _openProtectedPrescription() async {
+    final appointmentId = widget.id;
+    final serverPdfUrl = pdf?.trim();
+    if (appointmentId == null ||
+        appointmentId <= 0 ||
+        serverPdfUrl == null ||
+        serverPdfUrl.isEmpty) {
+      Fluttertoast.showToast(msg: 'Prescription is not available.');
+      return;
+    }
+
+    final client = Care360MedicalPdfClient(
+      apiBase: Uri.parse(Apis.baseUrl),
+      readToken: () async =>
+          SharedPreferenceHelper.getString(Preferences.auth_token),
+      allowLoopbackHttp:
+          const bool.fromEnvironment('K3_ALLOW_LOCAL_CLINICAL_HTTP'),
+    );
+    try {
+      await Navigator.of(context).push(MaterialPageRoute(
+        builder: (_) => Care360ProtectedPdfViewer(
+          loadPdf: () => client.fetchForAppointment(
+            appointmentId,
+            serverPdfUrl: serverPdfUrl,
+          ),
+        ),
+      ));
+    } finally {
+      client.close();
+    }
   }
 
   @override
@@ -1181,7 +1216,7 @@ class _patientDetailsScreenState extends State<patientDetailsScreen> with Ticker
                                                     padding: EdgeInsets.symmetric(vertical: 12),
                                                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                                                   ),
-                                                  onPressed: () {
+                                                  onPressed: () async {
                                                     medicineData.clear();
                                                     Map<String, dynamic> medicines;
                                                     for (int i = 0; i < listOfMedicine.length; i++) {
@@ -1211,12 +1246,15 @@ class _patientDetailsScreenState extends State<patientDetailsScreen> with Ticker
                                                     }
 
                                                     if (pdfData.length > 0) {
-                                                      reportView(this.context, pdfData, id, userId, convertMedicine);
-                                                      Fluttertoast.showToast(
-                                                        msg: getTranslated(context, AppString.pdf_generated).toString(),
-                                                        toastLength: Toast.LENGTH_SHORT,
-                                                        gravity: ToastGravity.BOTTOM,
-                                                      );
+                                                      final uploaded = await reportView(
+                                                        this.context, pdfData, id, userId, convertMedicine);
+                                                      if (uploaded && mounted) {
+                                                        Fluttertoast.showToast(
+                                                          msg: getTranslated(context, AppString.pdf_generated).toString(),
+                                                          toastLength: Toast.LENGTH_SHORT,
+                                                          gravity: ToastGravity.BOTTOM,
+                                                        );
+                                                      }
                                                     } else {
                                                       Fluttertoast.showToast(
                                                         msg: getTranslated(context, AppString.please_enter_data).toString(),
@@ -1246,9 +1284,7 @@ class _patientDetailsScreenState extends State<patientDetailsScreen> with Ticker
                                                 padding: EdgeInsets.symmetric(vertical: 12),
                                                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                                               ),
-                                              onPressed: () {
-                                                launchUrl(Uri.parse("$pdf"));
-                                              },
+                                              onPressed: _openProtectedPrescription,
                                             ),
                                           ),
                                         ),
