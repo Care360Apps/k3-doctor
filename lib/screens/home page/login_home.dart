@@ -686,6 +686,7 @@ class _LoginHomeScreenState extends State<LoginHomeScreen> {
                                       trailing: const Icon(Icons.chevron_right),
                                       onTap: () => Navigator.push(context, MaterialPageRoute<void>(builder: (_) => const DoctorPracticeScreen())),
                                     )),
+                                  Card(margin: const EdgeInsets.symmetric(horizontal: 16), child: ListTile(key: const Key('plus-trains'), leading: const Icon(Icons.school_outlined), title: const Text('Trains'), subtitle: const Text('Explore CNU and SpeakOut courses'), trailing: const Icon(Icons.chevron_right), onTap: () => Navigator.pushNamed(context, 'Courses'))),
                                   Card(margin: const EdgeInsets.symmetric(horizontal: 16), child: ListTile(leading: const Icon(Icons.school_outlined), title: const Text('Professional services'), subtitle: const Text('Training & CPD, Workforce and organizations roadmap'), onTap: () => Navigator.push(context, MaterialPageRoute<void>(builder: (_) => const Care360ServicesRoadmap(professional: true))))),
                                   Care360ProfessionalQuickActions(
                                     onOpen: (destination) {

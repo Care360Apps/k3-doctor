@@ -1,3 +1,4 @@
+import 'trains/trains_catalogue.dart';
 import 'startup_gate.dart';
 import 'dart:async';
 import'dart:io';
@@ -421,6 +422,7 @@ class _MyAppState extends State<MyApp> {
                 ),
               ),
               routes: {
+                'Courses': (context) => const TrainsCatalogue(),
                 'FirstLanguage': (routeContext) => Care360FirstLanguageScreen(
                   initialLanguage: effectiveLocale.languageCode,
                   onContinue: (code) async {

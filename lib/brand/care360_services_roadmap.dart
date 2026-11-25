@@ -1,3 +1,4 @@
+import '../trains/trains_catalogue.dart';
 import '../workforce/workforce_landing.dart';
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -14,6 +15,7 @@ class Care360ServicesRoadmap extends StatelessWidget {
   Widget build(BuildContext context) => Scaffold(
     appBar: AppBar(title: Text(professional ? 'Professional services' : 'More Care360 services')),
     body: ListView(padding: const EdgeInsets.all(16), children: [
+      ListTile(leading: const Icon(Icons.school_outlined), title: const Text('Trains'), subtitle: const Text('CNU and SpeakOut course catalogue'), trailing: const Icon(Icons.chevron_right), onTap: () => Navigator.push(context, MaterialPageRoute<void>(builder: (_) => const TrainsCatalogue()))),
       ListTile(leading:const Icon(Icons.work_outline),title:const Text('Workforce & CNU training'),subtitle:const Text('Career profiles, verified hiring and course requests'),trailing:const Icon(Icons.chevron_right),onTap:()=>Navigator.push(context,MaterialPageRoute<void>(builder:(_)=>const Care360WorkforceLanding()))),
       const Divider(),
       const Text('Upcoming services', style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold)),
