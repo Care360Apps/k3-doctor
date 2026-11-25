@@ -244,7 +244,14 @@ class _VideoCallState extends State<VideoCall> {
     final engine = _engine;
     if (engine == null || _isDisposed) return;
     final nextMuted = !mutedVideo;
+    if (!nextMuted) {
+      final granted = await Permission.camera.request();
+      if (!mounted || _isDisposed || !granted.isGranted ||
+          !await _isPhysicalDeviceForVideoCapture()) return;
+      if (!mounted || _isDisposed) return;
+    }
     try {
+      if (!nextMuted) await engine.enableLocalVideo(true);
       // Only suppress outgoing video; keep the authorized Agora audio session.
       await engine.muteLocalVideoStream(nextMuted);
       _safeSetState(() => mutedVideo = nextMuted);
@@ -280,10 +287,16 @@ class _VideoCallState extends State<VideoCall> {
       return;
     }
     if (!mounted || _isDisposed) return;
-    final canUseLocalVideoCapture = await _isPhysicalDeviceForVideoCapture();
+    final physicalVideoCapture = await _isPhysicalDeviceForVideoCapture();
+    final canUseLocalVideoCapture = physicalVideoCapture &&
+        grants[Permission.camera]?.isGranted == true;
     if (!mounted || _isDisposed) return;
 
     final engine = await createAgoraRtcEngine();
+    if (!mounted || _isDisposed) {
+      await engine.release();
+      return;
+    }
     _engine = engine;
     _leaveRequested = false;
     _released = false;
@@ -295,7 +308,7 @@ class _VideoCallState extends State<VideoCall> {
     await engine.enableVideo();
 
     if (!canUseLocalVideoCapture) {
-      debugPrint('iOS simulator detected: disabling local video capture to avoid crash.');
+      _safeSetState(() => mutedVideo = true);
       try {
         await engine.enableLocalVideo(false);
       } catch (_) {}
