@@ -69,6 +69,7 @@ class _VideoCallState extends State<VideoCall> {
   bool _released = false;
   bool _handledLeave = false;
   Timer? _leaveTimeoutTimer;
+  Timer? _remoteReconnectTimer;
 
   Future<bool> _isPhysicalDeviceForVideoCapture() async {
     // iOS Simulator has no real camera capture pipeline; Agora can crash after join.
@@ -134,6 +135,8 @@ class _VideoCallState extends State<VideoCall> {
   void _requestEndCall({String reason = 'user'}) {
     if (_isEnding) return;
     _isEnding = true;
+    _remoteReconnectTimer?.cancel();
+    _remoteReconnectTimer = null;
 
     _safeSetState(() {
       _localUserJoined = false;
@@ -323,25 +326,43 @@ class _VideoCallState extends State<VideoCall> {
           });
         },
         onUserJoined: (RtcConnection connection, int remoteUid, int elapsed) {
+          if (_isDisposed || _isEnding) return;
+          final reconnecting = _remoteReconnectTimer != null;
+          _remoteReconnectTimer?.cancel();
+          _remoteReconnectTimer = null;
+          if (reconnecting) Fluttertoast.showToast(msg: 'Participant reconnected.');
           // Presence is displayed in-app without logging identity.
           DateTime now = DateTime.now();
-          callTime = DateFormat('h:mm a').format(now);
-          callDate = DateFormat('yyyy-MM-dd').format(now);
+          if (callTime == null || callTime!.isEmpty) {
+            callTime = DateFormat('h:mm a').format(now);
+            callDate = DateFormat('yyyy-MM-dd').format(now);
+          }
           _safeSetState(() {
             _remoteUid = remoteUid;
           });
         },
         onUserOffline: (RtcConnection connection, int remoteUid, UserOfflineReasonType reason) {
-          if (_isDisposed) return;
-          _safeSetState(() {
-            _remoteUid = null;
-          });
-          Fluttertoast.showToast(msg: "Call Ended", toastLength: Toast.LENGTH_SHORT);
+          if (_isDisposed || _isEnding || _remoteUid != remoteUid) return;
+          _safeSetState(() => _remoteUid = null);
+          if (reason == UserOfflineReasonType.userOfflineDropped) {
+            Fluttertoast.showToast(msg: 'Connection interrupted. Waiting for participant to reconnect.');
+            _remoteReconnectTimer?.cancel();
+            _remoteReconnectTimer = Timer(const Duration(seconds: 45), () {
+              _remoteReconnectTimer = null;
+              if (_isDisposed || _isEnding || _remoteUid != null) return;
+              Fluttertoast.showToast(msg: 'Participant could not reconnect.');
+              _requestEndCall(reason: 'remote_reconnect_timeout');
+            });
+            return;
+          }
+          Fluttertoast.showToast(msg: 'Call ended');
           _requestEndCall(reason: 'remote_offline');
         },
         onLeaveChannel: (RtcConnection connection, RtcStats details) {
           if (_handledLeave) return;
           _handledLeave = true;
+          _remoteReconnectTimer?.cancel();
+          _remoteReconnectTimer = null;
 
           _leaveTimeoutTimer?.cancel();
           _leaveTimeoutTimer = null;
@@ -391,6 +412,8 @@ class _VideoCallState extends State<VideoCall> {
 
   @override
   void dispose() {
+    _remoteReconnectTimer?.cancel();
+    _remoteReconnectTimer = null;
     _isDisposed = true;
     _leaveTimeoutTimer?.cancel();
     _leaveTimeoutTimer = null;
