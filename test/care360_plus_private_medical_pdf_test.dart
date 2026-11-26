@@ -126,6 +126,26 @@ void main() {
     }
   });
 
+  test('Invalid appointment identifiers cannot trigger a medical download', () async {
+    var requests = 0;
+    final service = Care360MedicalPdfClient(
+      apiBase: base,
+      httpClient: MockClient((_) async {
+        requests++;
+        return http.Response(validPdf, 200);
+      }),
+      readToken: () async => 'synthetic-token',
+    );
+    for (final id in [0, -1]) {
+      await expectLater(
+        service.fetchForAppointment(id, serverPdfUrl:
+            'https://api.example.test/api/medical-files/appointments/12/prescription'),
+        throwsFormatException,
+      );
+    }
+    expect(requests, 0);
+  });
+
   test('No plaintext HTTP medical files in production mode', () async {
     final service = Care360MedicalPdfClient(
       apiBase: Uri.parse('http://127.0.0.1:8021/api/'),
