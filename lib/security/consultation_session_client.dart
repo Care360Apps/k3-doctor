@@ -33,8 +33,12 @@ class ConsultationCredentials {
       throw const FormatException('Expired consultation credentials.');
     }
     return ConsultationCredentials(sessionId: id, channel: channel,
-      uid: uid as int, token: token, appId: appId, expiresAt: expiresAt);
+      uid: uid, token: token, appId: appId, expiresAt: expiresAt);
   }
+}
+
+class ConsultationAccessRevoked extends StateError {
+  ConsultationAccessRevoked() : super('Consultation access is no longer available.');
 }
 
 /// Opt-in transport only. Never automatically fall back to legacy calls.
@@ -83,14 +87,14 @@ class ConsultationSessionClient {
   }
 
   Future<Map<String, dynamic>> _post(int id, String action, {String method = 'POST'}) async {
-    if (id <= 0 || apiBase.scheme != 'https' || apiBase.host.isEmpty ||
+    if ((expectedUid != 1 && expectedUid != 2) || id <= 0 || apiBase.scheme != 'https' || apiBase.host.isEmpty ||
         apiBase.userInfo.isNotEmpty || apiBase.hasQuery || apiBase.hasFragment ||
         !apiBase.path.endsWith('/api/')) {
       throw const FormatException('Invalid consultation API configuration.');
     }
     final token = (await readToken().timeout(timeout))?.trim();
     if (token == null || token.isEmpty || token == 'N_A' || token == 'null') {
-      throw StateError('Sign in to access the consultation.');
+      throw ConsultationAccessRevoked();
     }
     final request = http.Request(method, apiBase.resolve('consultations/v1/$id/$action'))
       ..followRedirects = false
@@ -101,6 +105,9 @@ class ConsultationSessionClient {
     final deadline = Stopwatch()..start();
     final bytes = <int>[];
     try {
+      if ([401, 403, 404, 409, 410].contains(response.statusCode)) {
+        throw ConsultationAccessRevoked();
+      }
       if (response.statusCode != 200) {
         throw StateError('Consultation unavailable. Please refresh or contact support.');
       }
