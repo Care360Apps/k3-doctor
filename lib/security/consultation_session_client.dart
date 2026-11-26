@@ -82,6 +82,10 @@ class ConsultationSessionClient {
     return state as String;
   }
 
+  Future<void> invite(int appointmentId) async {
+    await _post(appointmentId, 'invite');
+  }
+
   Future<void> end(int appointmentId) async {
     await _post(appointmentId, 'end');
   }
@@ -124,7 +128,7 @@ class ConsultationSessionClient {
       if (result is! Map<String, dynamic> || result['success'] != true) {
         throw const FormatException('Invalid consultation response.');
       }
-      if (action == 'end') return <String, dynamic>{};
+      if (action == 'end' || action == 'invite') return <String, dynamic>{};
       final data = result['data'];
       if (data is! Map<String, dynamic>) throw const FormatException('Missing credentials.');
       return data;
