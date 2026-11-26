@@ -58,6 +58,8 @@ class _ClinicalWorkspaceScreenState extends State<ClinicalWorkspaceScreen> {
   DateTime _observedAt = DateTime.now();
   List<Map<String, String>> _allergies = [];
   bool _loading = true;
+  bool _loadInFlight = false;
+  bool _leaveDialogOpen = false;
   bool _busy = false;
   bool _dirty = false;
   bool _allowPop = false;
@@ -74,12 +76,14 @@ class _ClinicalWorkspaceScreenState extends State<ClinicalWorkspaceScreen> {
 
   @override
   void dispose() {
-    _api.close();
+    if (widget.api == null) _api.close();
     for (final c in _vitals.values) c.dispose();
     super.dispose();
   }
 
   Future<void> _load() async {
+    if (!mounted || _loadInFlight) return;
+    _loadInFlight = true;
     setState(() {
       _loading = true;
       _error = null;
@@ -100,6 +104,7 @@ class _ClinicalWorkspaceScreenState extends State<ClinicalWorkspaceScreen> {
               : 'Unable to load clinical records.',
         );
     } finally {
+      _loadInFlight = false;
       if (mounted) setState(() => _loading = false);
     }
   }
@@ -110,12 +115,13 @@ class _ClinicalWorkspaceScreenState extends State<ClinicalWorkspaceScreen> {
   }
 
   Future<void> _leave() async {
-    if (_busy) return;
+    if (_busy || _leaveDialogOpen) return;
     if (!_dirty) {
       setState(() => _allowPop = true);
       Navigator.pop(context);
       return;
     }
+    _leaveDialogOpen = true;
     final discard = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
@@ -135,7 +141,8 @@ class _ClinicalWorkspaceScreenState extends State<ClinicalWorkspaceScreen> {
         ],
       ),
     );
-    if (discard == true && mounted) {
+    _leaveDialogOpen = false;
+    if (discard == true && mounted && !_busy) {
       setState(() => _allowPop = true);
       Navigator.pop(context);
     }
@@ -708,13 +715,17 @@ class _ClinicalWorkspaceScreenState extends State<ClinicalWorkspaceScreen> {
                                       ? null
                                       : () async {
                                           setState(() => _busy = true);
-                                          await saveClinicalResult(
-                                            context,
-                                            _api,
-                                            (o['id'] as num).toInt(),
-                                          );
-                                          if (mounted)
-                                            setState(() => _busy = false);
+                                          try {
+                                            await saveClinicalResult(
+                                              context,
+                                              _api,
+                                              (o['id'] as num).toInt(),
+                                            );
+                                          } catch (_) {
+                                            _message('Unable to save result. Please retry.');
+                                          } finally {
+                                            if (mounted) setState(() => _busy = false);
+                                          }
                                         },
                                   child: const Text(
                                     'Save released result for review',
