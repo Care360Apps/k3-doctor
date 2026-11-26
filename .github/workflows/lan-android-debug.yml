@@ -1,8 +1,6 @@
 name: Care360 Plus LAN Android debug (manual; no production)
+# Manual LAN build only. Do not consume hosted runners on every branch push.
 on:
-  push:
-    branches:
-      - build/lan-android-20261103
   workflow_dispatch:
     inputs:
       backend_ipv4:
