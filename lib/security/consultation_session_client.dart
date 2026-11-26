@@ -21,7 +21,7 @@ class ConsultationCredentials {
     final token = data['agora_token'];
     final appId = data['appId'];
     final expiry = data['expires_at'];
-    if (id is! int || id <= 0 || (uid != 1 && uid != 2) ||
+    if (id is! int || id <= 0 || (uid is! int || (uid != 1 && uid != 2)) ||
         channel is! String || !RegExp(r'^c[a-f0-9]{48}$').hasMatch(channel) ||
         token is! String || token.isEmpty || token.length > 4096 ||
         appId is! String || !RegExp(r'^[a-fA-F0-9]{32}$').hasMatch(appId) ||
@@ -59,11 +59,30 @@ class ConsultationSessionClient {
     return next;
   }
 
+  /// Returns server lifecycle state without requesting RTC credentials.
+  Future<String> status(int appointmentId, {int? expectedSessionId}) async {
+    final data = await _post(appointmentId, 'status', method: 'GET');
+    final state = data['state'];
+    if (state == 'not_started' && expectedSessionId == null) return 'not_started';
+    final id = data['session_id'];
+    final expiry = data['expires_at'];
+    if (id is! int || id <= 0 ||
+        (expectedSessionId != null && id != expectedSessionId) ||
+        expiry is! int || expiry <= 0 || expiry > 4102444800 ||
+        (state != 'active' && state != 'ended' && state != 'expired')) {
+      throw const FormatException('Invalid consultation status.');
+    }
+    if (state == 'active' && expiry <= DateTime.now().millisecondsSinceEpoch ~/ 1000) {
+      return 'expired';
+    }
+    return state as String;
+  }
+
   Future<void> end(int appointmentId) async {
     await _post(appointmentId, 'end');
   }
 
-  Future<Map<String, dynamic>> _post(int id, String action) async {
+  Future<Map<String, dynamic>> _post(int id, String action, {String method = 'POST'}) async {
     if (id <= 0 || apiBase.scheme != 'https' || apiBase.host.isEmpty ||
         apiBase.userInfo.isNotEmpty || apiBase.hasQuery || apiBase.hasFragment ||
         !apiBase.path.endsWith('/api/')) {
@@ -73,7 +92,7 @@ class ConsultationSessionClient {
     if (token == null || token.isEmpty || token == 'N_A' || token == 'null') {
       throw StateError('Sign in to access the consultation.');
     }
-    final request = http.Request('POST', apiBase.resolve('consultations/v1/$id/$action'))
+    final request = http.Request(method, apiBase.resolve('consultations/v1/$id/$action'))
       ..followRedirects = false
       ..headers['Authorization'] = 'Bearer $token'
       ..headers['Accept'] = 'application/json';
