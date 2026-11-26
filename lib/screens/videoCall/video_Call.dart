@@ -143,8 +143,14 @@ class _VideoCallState extends State<VideoCall> {
     _renewalTimer?.cancel();
     final credentials = _credentials;
     if (credentials == null || _isDisposed || _isEnding) return;
-    final delay = credentials.expiresAt.difference(DateTime.now()).inSeconds - 60;
-    _renewalTimer = Timer(Duration(seconds: delay > 0 ? delay : 1), () {
+    final remaining = credentials.expiresAt.difference(DateTime.now());
+    if (remaining <= Duration.zero) {
+      _requestEndCall(reason: 'credential_expiry');
+      return;
+    }
+    final delay = remaining - const Duration(seconds: 60);
+    final wait = delay > const Duration(seconds: 10) ? delay : const Duration(seconds: 10);
+    _renewalTimer = Timer(wait < remaining ? wait : remaining, () {
       unawaited(_renewCredentials());
     });
   }
@@ -154,11 +160,19 @@ class _VideoCallState extends State<VideoCall> {
     final previous = _credentials;
     final engine = _engine;
     if (client == null || previous == null || engine == null || _renewing || _isDisposed || _isEnding) return;
+    if (!previous.expiresAt.isAfter(DateTime.now())) {
+      _requestEndCall(reason: 'credential_expiry');
+      return;
+    }
     _renewing = true;
     try {
       final next = await client.credentials(widget.appointmentId!, previous: previous);
       if (_isDisposed || _isEnding || _engine != engine) return;
-      await engine.renewToken(next.token);
+      if (!next.expiresAt.isAfter(previous.expiresAt)) {
+        _scheduleRenewal();
+        return;
+      }
+      await engine.renewToken(next.token).timeout(const Duration(seconds: 10));
       if (_isDisposed || _isEnding) return;
       _credentials = next;
       _scheduleRenewal();
@@ -384,13 +398,13 @@ class _VideoCallState extends State<VideoCall> {
 
   Future<void> _onToggleVideo() async {
     final engine = _engine;
-    if (engine == null || _isDisposed) return;
+    if (engine == null || _isDisposed || _isEnding) return;
     final nextMuted = !mutedVideo;
     if (!nextMuted) {
       final granted = await Permission.camera.request();
       if (!mounted || _isDisposed || !granted.isGranted ||
           !await _isPhysicalDeviceForVideoCapture()) return;
-      if (!mounted || _isDisposed) return;
+      if (!mounted || _isDisposed || _isEnding || _engine != engine) return;
     }
     try {
       if (!nextMuted) await engine.enableLocalVideo(true);
@@ -403,7 +417,7 @@ class _VideoCallState extends State<VideoCall> {
   }
 
   void _onSwitchCamera() {
-    if (!mutedVideo) _engine?.switchCamera();
+    if (!mutedVideo && !_isEnding && !_isDisposed) _engine?.switchCamera();
   }
 
   Future<void> initAgora() async {
@@ -447,7 +461,9 @@ class _VideoCallState extends State<VideoCall> {
     _leaveTimeoutTimer = null;
 
     await engine.initialize(RtcEngineContext(appId: resolvedAppId));
+    if (_isDisposed || _isEnding || _engine != engine) return;
     await engine.enableVideo();
+    if (_isDisposed || _isEnding || _engine != engine) return;
 
     if (!canUseLocalVideoCapture) {
       _safeSetState(() => mutedVideo = true);
@@ -544,6 +560,7 @@ class _VideoCallState extends State<VideoCall> {
       await engine.startPreview();
     }
 
+    if (_isDisposed || _isEnding || _engine != engine) return;
     final joinChannelId = channelName!.trim();
     final joinToken = token!.trim();
 
