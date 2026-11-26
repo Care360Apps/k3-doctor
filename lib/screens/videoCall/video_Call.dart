@@ -194,6 +194,29 @@ class _VideoCallState extends State<VideoCall> {
     }
   }
 
+  bool _sendingInvitation = false;
+  bool _invitationRequested = false;
+
+  Future<void> _sendConsultationInvitation() async {
+    final id = widget.appointmentId;
+    final client = widget.sessionClient;
+    if (id == null || client == null || !_localUserJoined ||
+        _isEnding || _isDisposed || _sendingInvitation || _invitationRequested) return;
+    _safeSetState(() => _sendingInvitation = true);
+    try {
+      await client.invite(id);
+      if (!mounted || _isDisposed || _isEnding) return;
+      _safeSetState(() => _invitationRequested = true);
+      Fluttertoast.showToast(msg: 'Invitation requested.');
+    } catch (_) {
+      if (mounted && !_isDisposed && !_isEnding) {
+        Fluttertoast.showToast(msg: 'Invitation unavailable. Please try again later.');
+      }
+    } finally {
+      _safeSetState(() => _sendingInvitation = false);
+    }
+  }
+
   Future<void> _startAppointmentSession() async {
     try {
       final id = widget.appointmentId;
@@ -657,6 +680,18 @@ class _VideoCallState extends State<VideoCall> {
                               ),
                             ],
                           ),
+                    if (widget.appointmentId != null && _localUserJoined &&
+                        _remoteUid == null && !_isEnding && !isFloating)
+                      Positioned(
+                        top: MediaQuery.of(context).padding.top + 12,
+                        right: 12,
+                        child: ElevatedButton(
+                          onPressed: _sendingInvitation || _invitationRequested
+                              ? null : _sendConsultationInvitation,
+                          child: Text(_invitationRequested ? 'Invitation requested' :
+                              _sendingInvitation ? 'Sending...' : 'Invite participant'),
+                        ),
+                      ),
                     _toolbar(),
                   ],
                 ),
