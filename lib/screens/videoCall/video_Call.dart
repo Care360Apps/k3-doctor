@@ -28,7 +28,11 @@ import 'package:doctro/constant/preferences.dart';
 import 'package:doctro/screens/home page/login_home.dart';
 import 'package:doctro/screens/videoCall/model/doctorAgoraTokenGenerateModel.dart';
 
+import 'package:doctro/security/consultation_session_client.dart';
+
 class VideoCall extends StatefulWidget {
+  final int? appointmentId;
+  final ConsultationSessionClient? sessionClient;
 
   final bool callEnd;
   final int? id;
@@ -36,6 +40,8 @@ class VideoCall extends StatefulWidget {
 
   VideoCall({
     required this.callEnd,
+    this.appointmentId,
+    this.sessionClient,
     this.id,
     this.flag,
   });
@@ -70,6 +76,66 @@ class _VideoCallState extends State<VideoCall> {
   bool _handledLeave = false;
   Timer? _leaveTimeoutTimer;
   Timer? _remoteReconnectTimer;
+  Timer? _renewalTimer;
+  ConsultationCredentials? _credentials;
+  bool _renewing = false;
+
+  void _scheduleRenewal() {
+    _renewalTimer?.cancel();
+    final credentials = _credentials;
+    if (credentials == null || _isDisposed || _isEnding) return;
+    final delay = credentials.expiresAt.difference(DateTime.now()).inSeconds - 60;
+    _renewalTimer = Timer(Duration(seconds: delay > 0 ? delay : 1), () {
+      unawaited(_renewCredentials());
+    });
+  }
+
+  Future<void> _renewCredentials() async {
+    final client = widget.sessionClient;
+    final previous = _credentials;
+    final engine = _engine;
+    if (client == null || previous == null || engine == null || _renewing || _isDisposed || _isEnding) return;
+    _renewing = true;
+    try {
+      final next = await client.credentials(widget.appointmentId!, previous: previous);
+      if (_isDisposed || _isEnding || _engine != engine) return;
+      await engine.renewToken(next.token);
+      if (_isDisposed || _isEnding) return;
+      _credentials = next;
+      _scheduleRenewal();
+    } catch (_) {
+      if (_isDisposed || _isEnding) return;
+      if (previous.expiresAt.difference(DateTime.now()).inSeconds <= 20) {
+        Fluttertoast.showToast(msg: 'Secure consultation expired.');
+        _requestEndCall(reason: 'credential_expiry');
+      } else {
+        _renewalTimer?.cancel();
+        _renewalTimer = Timer(const Duration(seconds: 10), () => unawaited(_renewCredentials()));
+      }
+    } finally {
+      _renewing = false;
+    }
+  }
+
+  Future<void> _startAppointmentSession() async {
+    try {
+      final id = widget.appointmentId;
+      if (id == null || id <= 0 || widget.sessionClient == null) throw StateError('Missing session configuration');
+      final credentials = await widget.sessionClient!.credentials(id);
+      if (!mounted || _isDisposed || _isEnding) return;
+      if (credentials.uid != 2) throw StateError('Invalid professional identity');
+      _credentials = credentials;
+      token = credentials.token;
+      channelName = credentials.channel;
+      appId = credentials.appId;
+      uid = credentials.uid;
+      await initAgora();
+      if (!_isDisposed && !_isEnding && _engine != null) _scheduleRenewal();
+    } catch (_) {
+      if (mounted && !_isDisposed) Fluttertoast.showToast(msg: 'Secure consultation unavailable.');
+      await _releaseEngineOnce();
+    }
+  }
 
   Future<bool> _isPhysicalDeviceForVideoCapture() async {
     // iOS Simulator has no real camera capture pipeline; Agora can crash after join.
@@ -135,6 +201,7 @@ class _VideoCallState extends State<VideoCall> {
   void _requestEndCall({String reason = 'user'}) {
     if (_isEnding) return;
     _isEnding = true;
+    _renewalTimer?.cancel();
     _remoteReconnectTimer?.cancel();
     _remoteReconnectTimer = null;
 
@@ -149,7 +216,11 @@ class _VideoCallState extends State<VideoCall> {
   @override
   void initState() {
     super.initState();
-    settingRequest();
+    if (widget.sessionClient != null || widget.appointmentId != null) {
+      unawaited(_startAppointmentSession());
+    } else {
+      settingRequest();
+    }
     offset = const Offset(20.0, 50.0);
   }
 
@@ -326,7 +397,7 @@ class _VideoCallState extends State<VideoCall> {
           });
         },
         onUserJoined: (RtcConnection connection, int remoteUid, int elapsed) {
-          if (_isDisposed || _isEnding) return;
+          if (_isDisposed || _isEnding || (_credentials != null && remoteUid != 1)) return;
           final reconnecting = _remoteReconnectTimer != null;
           _remoteReconnectTimer?.cancel();
           _remoteReconnectTimer = null;
@@ -358,6 +429,9 @@ class _VideoCallState extends State<VideoCall> {
           Fluttertoast.showToast(msg: 'Call ended');
           _requestEndCall(reason: 'remote_offline');
         },
+        onTokenPrivilegeWillExpire: (connection, expiringToken) {
+          unawaited(_renewCredentials());
+        },
         onLeaveChannel: (RtcConnection connection, RtcStats details) {
           if (_handledLeave) return;
           _handledLeave = true;
@@ -381,7 +455,7 @@ class _VideoCallState extends State<VideoCall> {
               );
             }
           } else {
-            if (callTime != "" && callDate != "" && widget.callEnd == false) {
+            if (_credentials == null && callTime != "" && callDate != "" && widget.callEnd == false) {
               unawaited(callApiAddVideoCallHistory());
             }
             if (mounted) {
@@ -412,6 +486,7 @@ class _VideoCallState extends State<VideoCall> {
 
   @override
   void dispose() {
+    _renewalTimer?.cancel();
     _remoteReconnectTimer?.cancel();
     _remoteReconnectTimer = null;
     _isDisposed = true;
