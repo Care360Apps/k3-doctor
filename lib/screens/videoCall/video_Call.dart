@@ -106,6 +106,11 @@ class _VideoCallState extends State<VideoCall> {
         Fluttertoast.showToast(msg: 'Consultation has ended.');
         _requestEndCall(reason: 'server_closed');
       }
+    } on ConsultationAccessRevoked {
+      if (!_isDisposed && !_isEnding) {
+        Fluttertoast.showToast(msg: 'Consultation access ended.');
+        _requestEndCall(reason: 'access_revoked');
+      }
     } on FormatException {
       if (!_isDisposed && !_isEnding) {
         _requestEndCall(reason: 'invalid_session');
@@ -157,6 +162,10 @@ class _VideoCallState extends State<VideoCall> {
       if (_isDisposed || _isEnding) return;
       _credentials = next;
       _scheduleRenewal();
+    } on ConsultationAccessRevoked {
+      if (!_isDisposed && !_isEnding) _requestEndCall(reason: 'access_revoked');
+    } on FormatException {
+      if (!_isDisposed && !_isEnding) _requestEndCall(reason: 'invalid_session');
     } catch (_) {
       if (_isDisposed || _isEnding) return;
       if (previous.expiresAt.difference(DateTime.now()).inSeconds <= 20) {
@@ -419,14 +428,14 @@ class _VideoCallState extends State<VideoCall> {
       Fluttertoast.showToast(msg: 'Microphone permission is required for calls.');
       return;
     }
-    if (!mounted || _isDisposed) return;
+    if (!mounted || _isDisposed || _isEnding) return;
     final physicalVideoCapture = await _isPhysicalDeviceForVideoCapture();
     final canUseLocalVideoCapture = physicalVideoCapture &&
         grants[Permission.camera]?.isGranted == true;
-    if (!mounted || _isDisposed) return;
+    if (!mounted || _isDisposed || _isEnding) return;
 
     final engine = await createAgoraRtcEngine();
-    if (!mounted || _isDisposed) {
+    if (!mounted || _isDisposed || _isEnding) {
       await engine.release();
       return;
     }
