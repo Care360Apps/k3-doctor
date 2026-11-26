@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:typed_data';
 import 'package:dio/dio.dart';
 import '../../retrofit/api_header.dart';
@@ -98,14 +99,23 @@ class ClinicalWorkspaceApi {
     if (r.statusCode != 200 || r.data == null)
       throw const ClinicalWorkspaceFailure('Result unavailable.');
     final bytes = BytesBuilder(copy: false);
-    await for (final part in r.data!.stream.timeout(
-      const Duration(seconds: 20),
-    )) {
-      bytes.add(part);
-      if (bytes.length > 10 * 1024 * 1024)
-        throw const ClinicalWorkspaceFailure(
-          'Result exceeds the download limit.',
-        );
+    final iterator = StreamIterator<Uint8List>(r.data!.stream);
+    final clock = Stopwatch()..start();
+    try {
+      while (true) {
+        final remaining = const Duration(seconds: 30) - clock.elapsed;
+        if (remaining <= Duration.zero) throw TimeoutException('Clinical result');
+        if (!await iterator.moveNext().timeout(remaining)) break;
+        final part = iterator.current;
+        if (bytes.length + part.length > 10 * 1024 * 1024) {
+          throw const ClinicalWorkspaceFailure('Result exceeds the download limit.');
+        }
+        bytes.add(part);
+      }
+    } on TimeoutException {
+      throw const ClinicalWorkspaceFailure('Result download timed out. Please retry.');
+    } finally {
+      await iterator.cancel();
     }
     final b = bytes.takeBytes();
     final pdf = b.length >= 5 && String.fromCharCodes(b.take(5)) == '%PDF-';
