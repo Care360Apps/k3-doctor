@@ -106,9 +106,12 @@ class Care360MedicalPdfClient {
         throw const MedicalPdfException(
             'Prescription unavailable. Please refresh or contact support.');
       }
-      final type = response.headers['content-type']?.toLowerCase() ?? '';
-      if (!(type.startsWith('application/pdf') ||
-          type.startsWith('application/octet-stream'))) {
+      final length = response.contentLength;
+      if (length != null && length > maxPdfBytes) {
+        throw const MedicalPdfException('Prescription exceeds the file limit.');
+      }
+      final type = (response.headers['content-type'] ?? '').split(';').first.trim().toLowerCase();
+      if (type != 'application/pdf' && type != 'application/octet-stream') {
         throw const MedicalPdfException('Unexpected document response.');
       }
 
@@ -155,7 +158,7 @@ class Care360MedicalPdfClient {
     if (networkTimeout <= Duration.zero) {
       throw const FormatException('Invalid clinical network timeout.');
     }
-    if (apiBase.path.isEmpty ||
+    if (apiBase.host.isEmpty || apiBase.path.isEmpty ||
         !apiBase.path.endsWith('/api/') ||
         apiBase.hasQuery ||
         apiBase.hasFragment ||
