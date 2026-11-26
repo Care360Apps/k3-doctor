@@ -1,3 +1,5 @@
+import 'package:doctro/security/consultation_session_client.dart';
+import 'package:http/http.dart' as http;
 import '../appointment/clinical_workspace_screen.dart';
 import 'dart:convert';
 import 'package:cached_network_image/cached_network_image.dart';
@@ -1752,7 +1754,38 @@ class _patientDetailsScreenState extends State<patientDetailsScreen>
         DateTime.now().isAtSameMomentAs(start);
   }
 
+  bool _openingConsultation = false;
+
+  Future<void> _openSecureConsultation() async {
+    final appointment = widget.id;
+    if (_openingConsultation || !mounted || appointment == null || appointment <= 0) return;
+    setState(() => _openingConsultation = true);
+    final transport = http.Client();
+    try {
+      final session = ConsultationSessionClient(
+        apiBase: Uri.parse(Apis.baseUrl),
+        readToken: () async => SharedPreferenceHelper.getString(Preferences.auth_token),
+        client: transport,
+        expectedUid: 2,
+      );
+      await Navigator.of(context).push(MaterialPageRoute<void>(
+        builder: (_) => VideoCall(id: userId, callEnd: false, flag: 'InComing', appointmentId: appointment, sessionClient: session),
+      ));
+    } finally {
+      transport.close();
+      if (mounted) setState(() => _openingConsultation = false);
+    }
+  }
+
   _addVideoOverlay(BuildContext context) {
+    if (const bool.fromEnvironment('K3_SECURE_CONSULTATION_PILOT')) {
+      if (visitType == 'video_call' && _isApproved) {
+        _openSecureConsultation();
+      } else {
+        Fluttertoast.showToast(msg: 'An approved video appointment is required.');
+      }
+      return;
+    }
     OverlayService().addVideosOverlay(
       context,
       VideoCall(id: userId, callEnd: false, flag: "OutGoing"),
