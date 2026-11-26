@@ -53,4 +53,16 @@ void main() {
       headers: {'location': 'https://other.invalid/'})));
     await expectLater(api.credentials(42), throwsStateError);
   });
+  test('authorization failure is terminal', () async {
+    final api = make(MockClient((_) async => http.Response('', 403)));
+    await expectLater(api.status(42), throwsA(isA<ConsultationAccessRevoked>()));
+  });
+  test('status rejects changed session', () async {
+    final api = make(MockClient((request) async {
+      expect(request.method, 'GET');
+      return response({'state': 'active', 'session_id': 10,
+        'expires_at': DateTime.now().add(const Duration(minutes: 5)).millisecondsSinceEpoch ~/ 1000});
+    }));
+    await expectLater(api.status(42, expectedSessionId: 9), throwsFormatException);
+  });
 }
