@@ -2162,9 +2162,38 @@ class _LoginHomeScreenState extends State<LoginHomeScreen> {
     );
   }
 
+  static bool _openingConsultationInvite = false;
+  bool _notificationListenerRegistered = false;
+
   Future<void> getOneSingleToken() async {
+    if (_notificationListenerRegistered) return;
+    _notificationListenerRegistered = true;
     try {
       OneSignal.Notifications.addClickListener((event) async {
+        if (!mounted) return;
+        final payload = event.notification.additionalData;
+        if (payload?['type'] == 'consultation_invite') {
+          if (!const bool.fromEnvironment('K3_SECURE_CONSULTATION_PILOT') ||
+              _openingConsultationInvite ||
+              !SharedPreferenceHelper.getBoolean(Preferences.is_logged_in)) return;
+          final raw = payload?['appointment_id'];
+          final appointment = raw is int ? raw : raw is String ? int.tryParse(raw) : null;
+          if (appointment == null || appointment <= 0) return;
+          _openingConsultationInvite = true;
+          try {
+            final token = SharedPreferenceHelper.getString(Preferences.auth_token);
+            if (!mounted || token == null || token.trim().isEmpty ||
+                token == 'N_A' || token == 'null' ||
+                !SharedPreferenceHelper.getBoolean(Preferences.is_logged_in)) return;
+            await Navigator.of(context).push(MaterialPageRoute<void>(
+              builder: (_) => patientDetailsScreen(id: appointment),
+            ));
+          } finally {
+            _openingConsultationInvite = false;
+          }
+          return;
+        }
+        if (payload == null || payload['id'] == null) return;
         if (event.result.actionId == "") {
         } else if (event.result.actionId == "decline") {
           setState(() {
