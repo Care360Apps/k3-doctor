@@ -79,6 +79,60 @@ class _VideoCallState extends State<VideoCall> {
   Timer? _renewalTimer;
   ConsultationCredentials? _credentials;
   bool _renewing = false;
+  Timer? _statusTimer;
+  bool _checkingStatus = false;
+  bool _statusWarningShown = false;
+
+  void _scheduleStatusCheck() {
+    _statusTimer?.cancel();
+    if (_isDisposed || _isEnding || _credentials == null) return;
+    _statusTimer = Timer(const Duration(seconds: 15), () {
+      unawaited(_checkSessionStatus());
+    });
+  }
+
+  Future<void> _checkSessionStatus() async {
+    final credentials = _credentials;
+    final client = widget.sessionClient;
+    final id = widget.appointmentId;
+    if (_checkingStatus || _isDisposed || _isEnding ||
+        credentials == null || client == null || id == null) return;
+    _checkingStatus = true;
+    try {
+      final state = await client.status(id, expectedSessionId: credentials.sessionId);
+      if (_isDisposed || _isEnding) return;
+      _statusWarningShown = false;
+      if (state != 'active') {
+        Fluttertoast.showToast(msg: 'Consultation has ended.');
+        _requestEndCall(reason: 'server_closed');
+      }
+    } on FormatException {
+      if (!_isDisposed && !_isEnding) {
+        _requestEndCall(reason: 'invalid_session');
+      }
+    } catch (_) {
+      if (!_isDisposed && !_isEnding && !_statusWarningShown) {
+        _statusWarningShown = true;
+        Fluttertoast.showToast(msg: 'Unable to verify consultation status. Retrying.');
+      }
+    } finally {
+      _checkingStatus = false;
+      _scheduleStatusCheck();
+    }
+  }
+
+  Future<void> _notifySessionEnd() async {
+    final client = widget.sessionClient;
+    final id = widget.appointmentId;
+    if (_credentials == null || client == null || id == null) return;
+    try {
+      await client.end(id);
+    } catch (_) {
+      if (mounted && !_isDisposed) {
+        Fluttertoast.showToast(msg: 'Call closed locally. Server confirmation unavailable.');
+      }
+    }
+  }
 
   void _scheduleRenewal() {
     _renewalTimer?.cancel();
@@ -130,7 +184,10 @@ class _VideoCallState extends State<VideoCall> {
       appId = credentials.appId;
       uid = credentials.uid;
       await initAgora();
-      if (!_isDisposed && !_isEnding && _engine != null) _scheduleRenewal();
+      if (!_isDisposed && !_isEnding && _engine != null) {
+        _scheduleRenewal();
+        _scheduleStatusCheck();
+      }
     } catch (_) {
       if (mounted && !_isDisposed) Fluttertoast.showToast(msg: 'Secure consultation unavailable.');
       await _releaseEngineOnce();
@@ -201,7 +258,9 @@ class _VideoCallState extends State<VideoCall> {
   void _requestEndCall({String reason = 'user'}) {
     if (_isEnding) return;
     _isEnding = true;
+    _statusTimer?.cancel();
     _renewalTimer?.cancel();
+    if (reason == 'user') unawaited(_notifySessionEnd());
     _remoteReconnectTimer?.cancel();
     _remoteReconnectTimer = null;
 
@@ -435,6 +494,9 @@ class _VideoCallState extends State<VideoCall> {
         onLeaveChannel: (RtcConnection connection, RtcStats details) {
           if (_handledLeave) return;
           _handledLeave = true;
+          _isEnding = true;
+          _statusTimer?.cancel();
+          _renewalTimer?.cancel();
           _remoteReconnectTimer?.cancel();
           _remoteReconnectTimer = null;
 
@@ -486,6 +548,7 @@ class _VideoCallState extends State<VideoCall> {
 
   @override
   void dispose() {
+    _statusTimer?.cancel();
     _renewalTimer?.cancel();
     _remoteReconnectTimer?.cancel();
     _remoteReconnectTimer = null;
