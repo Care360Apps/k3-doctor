@@ -106,7 +106,6 @@ jobs:
           mv ios "$RUNNER_TEMP/k3-ios-project"
       - name: Resolve Flutter packages using committed lockfile
         run: |
-          flutter pub get
           flutter pub get --enforce-lockfile
           git diff --exit-code -- pubspec.lock
       - name: Generate Retrofit client from source
