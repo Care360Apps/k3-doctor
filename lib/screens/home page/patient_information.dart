@@ -1,3 +1,4 @@
+import 'package:doctro/security/care360_report_image.dart';
 import 'package:doctro/security/consultation_session_client.dart';
 import 'package:http/http.dart' as http;
 import '../appointment/clinical_workspace_screen.dart';
@@ -1368,9 +1369,12 @@ class _patientDetailsScreenState extends State<patientDetailsScreen>
                                                               BorderRadius.circular(
                                                                 12,
                                                               ),
-                                                          child: Image.network(
-                                                            reportImages[index],
-                                                            fit: BoxFit.cover,
+                                                          child: Care360ReportImage(
+                                                            key: ValueKey(reportImages[index]),
+                                                            apiBase: Uri.parse(Apis.baseUrl),
+                                                            appointmentId: widget.id ?? 0,
+                                                            url: reportImages[index],
+                                                            readToken: () async => SharedPreferenceHelper.getString(Preferences.auth_token),
                                                           ),
                                                         ),
                                                       ),
