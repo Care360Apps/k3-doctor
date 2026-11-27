@@ -63,7 +63,7 @@ jobs:
           mv ios "$RUNNER_TEMP/k3-ios-project"
       - name: Install dependencies (Linux source only)
         run: |
-          flutter pub get
+          flutter pub get --enforce-lockfile
       - name: Restore iOS project for complete source inspection
         if: always()
         run: |

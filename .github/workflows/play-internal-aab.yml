@@ -40,7 +40,7 @@ jobs:
           cache: gradle
       - uses: subosito/flutter-action@v2
         with:
-          flutter-version: '3.38.3'
+          flutter-version: '3.38.4'
           channel: stable
           cache: true
       - name: Install production identity and signing material (never print secrets)
@@ -78,11 +78,14 @@ jobs:
           VERSION_CODE: ${{ inputs.version_code }}
         run: |
           set -euo pipefail
-          flutter config --enable-swift-package-manager
+          # Match the offline Android build and avoid validating iOS plugins on Linux.
+          mv ios "$RUNNER_TEMP/k3-ios-project"
+          trap 'mv "$RUNNER_TEMP/k3-ios-project" ios' EXIT
           flutter pub get --enforce-lockfile
           dart run build_runner build --delete-conflicting-outputs
           python3 tools/k3_rewrite_generated_url.py
           flutter build appbundle --release --build-name="$VERSION_NAME" --build-number="$VERSION_CODE" --dart-define=K3_BUILD_ENV=production --dart-define-from-file=android/app/release-defines.json
+          git diff --exit-code -- pubspec.lock
           test -s build/app/outputs/bundle/release/app-release.aab
           sha256sum build/app/outputs/bundle/release/app-release.aab
       - name: Store AAB for manual Play Console upload (no automatic publishing)

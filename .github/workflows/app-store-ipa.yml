@@ -19,7 +19,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: subosito/flutter-action@v2
         with:
-          flutter-version: '3.38.3'
+          flutter-version: '3.38.4'
           channel: stable
       - name: Validate source and prepare production configuration
         env:
@@ -95,10 +95,12 @@ jobs:
           VERSION: ${{ inputs.version_name }}
           BUILD: ${{ inputs.build_number }}
         run: |
+          flutter config --enable-swift-package-manager
           flutter pub get --enforce-lockfile
           dart run build_runner build --delete-conflicting-outputs
           python3 tools/k3_rewrite_generated_url.py
           flutter build ipa --release --build-name="$VERSION" --build-number="$BUILD" --dart-define=K3_BUILD_ENV=production --dart-define-from-file="$RUNNER_TEMP/release.json" --export-options-plist="$RUNNER_TEMP/ExportOptions.plist"
+          git diff --exit-code -- pubspec.lock
       - uses: actions/upload-artifact@v4
         with:
           name: care360-plus-signed-ipa
