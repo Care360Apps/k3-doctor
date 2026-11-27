@@ -40,7 +40,7 @@ jobs:
           cache: gradle
       - uses: subosito/flutter-action@v2
         with:
-          flutter-version: '3.38.3'
+          flutter-version: '3.38.4'
           channel: stable
           cache: true
       - name: Install production identity and signing material (never print secrets)
@@ -82,7 +82,7 @@ jobs:
           flutter pub get --enforce-lockfile
           dart run build_runner build --delete-conflicting-outputs
           python3 tools/k3_rewrite_generated_url.py
-          flutter build appbundle --release --build-name="$VERSION_NAME" --build-number="$VERSION_CODE" --dart-define=K3_BUILD_ENV=production --dart-define-from-file=android/app/release-defines.json
+          flutter build appbundle --no-pub --release --build-name="$VERSION_NAME" --build-number="$VERSION_CODE" --dart-define=K3_BUILD_ENV=production --dart-define-from-file=android/app/release-defines.json
           test -s build/app/outputs/bundle/release/app-release.aab
           sha256sum build/app/outputs/bundle/release/app-release.aab
       - name: Store AAB for manual Play Console upload (no automatic publishing)

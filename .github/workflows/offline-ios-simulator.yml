@@ -22,7 +22,7 @@ jobs:
           python3 tools/k3_notification_preflight.py
       - uses: subosito/flutter-action@v2
         with:
-          flutter-version: '3.38.3'
+          flutter-version: '3.38.4'
           channel: stable
           cache: true
       - name: Enable Swift Package Manager for Paystack
@@ -32,7 +32,7 @@ jobs:
           python3 tools/k3_offline_ios_fixture.py
           python3 tools/k3_staging_config.py --platform ios --firebase ios/Runner/GoogleService-Info.plist --out "$RUNNER_TEMP/k3_offline_ios.json"
       - name: Install packages
-        run: flutter pub get
+        run: flutter pub get --enforce-lockfile
       - name: Generate code
         run: dart run build_runner build --delete-conflicting-outputs
       - name: Rewrite generated Retrofit URL to use Dart environment
@@ -48,7 +48,7 @@ jobs:
           retention-days: 5
           if-no-files-found: error
       - name: Compile iOS Simulator-only binary (not signed for distribution)
-        run: flutter build ios --simulator --dart-define=K3_BUILD_ENV=staging --dart-define-from-file="$RUNNER_TEMP/k3_offline_ios.json"
+        run: flutter build ios --no-pub --simulator --dart-define=K3_BUILD_ENV=staging --dart-define-from-file="$RUNNER_TEMP/k3_offline_ios.json"
       - name: Package iOS Simulator artifact
         run: |
           test -d build/ios/iphonesimulator/Runner.app

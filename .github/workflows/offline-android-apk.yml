@@ -27,7 +27,7 @@ jobs:
           cache: gradle
       - uses: subosito/flutter-action@v2
         with:
-          flutter-version: '3.38.3'
+          flutter-version: '3.38.4'
           channel: stable
           cache: true
       - name: Prepare synthetic-only API/Firebase and distinct debug package
@@ -38,7 +38,6 @@ jobs:
           mv ios "$RUNNER_TEMP/k3-ios-project"
       - name: Get Flutter dependencies with pinned lockfile
         run: |
-          flutter pub get
           flutter pub get --enforce-lockfile
           git diff --exit-code -- pubspec.lock
       - name: Generate Retrofit client and enforce configured API URL
@@ -47,7 +46,7 @@ jobs:
           python3 tools/k3_rewrite_generated_url.py
       - name: Build Android debug APK only
         run: >-
-          flutter build apk --debug
+          flutter build apk --no-pub --debug
           --target-platform=android-arm64
           --dart-define=K3_BUILD_ENV=staging
           --dart-define-from-file="${{ runner.temp }}/k3_offline_dart_defines.json"
