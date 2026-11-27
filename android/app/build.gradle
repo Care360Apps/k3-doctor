@@ -67,6 +67,9 @@ gradle.taskGraph.whenReady { graph ->
 // Android core Java API desugaring used by local notifications.
 dependencies {
     coreLibraryDesugaring 'com.android.tools:desugar_jdk_libs:2.1.4'
+
+    // Supply the SLF4J 1.7 binder while preserving its default no-op logging.
+    releaseRuntimeOnly 'org.slf4j:slf4j-nop:1.7.36'
 }
 
 flutter {
