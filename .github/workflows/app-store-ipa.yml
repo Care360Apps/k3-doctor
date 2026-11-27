@@ -99,7 +99,8 @@ jobs:
           flutter pub get --enforce-lockfile
           dart run build_runner build --delete-conflicting-outputs
           python3 tools/k3_rewrite_generated_url.py
-          flutter build ipa --no-pub --release --build-name="$VERSION" --build-number="$BUILD" --dart-define=K3_BUILD_ENV=production --dart-define-from-file="$RUNNER_TEMP/release.json" --export-options-plist="$RUNNER_TEMP/ExportOptions.plist"
+          flutter build ipa --release --build-name="$VERSION" --build-number="$BUILD" --dart-define=K3_BUILD_ENV=production --dart-define-from-file="$RUNNER_TEMP/release.json" --export-options-plist="$RUNNER_TEMP/ExportOptions.plist"
+          git diff --exit-code -- pubspec.lock
       - uses: actions/upload-artifact@v4
         with:
           name: care360-plus-signed-ipa
