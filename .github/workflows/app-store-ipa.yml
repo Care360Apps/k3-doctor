@@ -1,0 +1,112 @@
+name: Care360 signed iOS IPA (manual, upload-only)
+on:
+  workflow_dispatch:
+    inputs:
+      version_name:
+        required: true
+        type: string
+      build_number:
+        required: true
+        type: string
+permissions:
+  contents: read
+jobs:
+  archive:
+    runs-on: macos-latest
+    timeout-minutes: 90
+    environment: app-store-build
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.38.3'
+          channel: stable
+      - name: Validate source and prepare production configuration
+        env:
+          VERSION: ${{ inputs.version_name }}
+          BUILD: ${{ inputs.build_number }}
+          FIREBASE: ${{ secrets.K3_PROD_IOS_FIREBASE_PLIST_B64 }}
+          API: ${{ secrets.K3_PROD_API_URL }}
+          PROJECT: ${{ vars.K3_PRODUCTION_FIREBASE_PROJECT_ID }}
+        run: |
+          set -euo pipefail
+          umask 077
+          python3 tools/k3_preflight.py
+          python3 tools/k3_notification_preflight.py
+          printf '%s' "$FIREBASE" | base64 -D > ios/Runner/GoogleService-Info.plist
+          python3 - <<'PY'
+          import os, re, plistlib, json, pathlib
+          from urllib.parse import urlsplit
+          assert re.fullmatch(r'[0-9]+\.[0-9]+\.[0-9]+', os.environ['VERSION'])
+          assert re.fullmatch(r'[1-9][0-9]*', os.environ['BUILD'])
+          u=urlsplit(os.environ['API'])
+          assert u.scheme=='https' and u.hostname and u.path=='/api/' and not (u.username or u.password or u.query or u.fragment)
+          d=plistlib.loads(pathlib.Path('ios/Runner/GoogleService-Info.plist').read_bytes())
+          assert d['BUNDLE_ID']=='com.cnu.doctor'
+          assert os.environ['PROJECT'] and d['PROJECT_ID']==os.environ['PROJECT']
+          vals=dict(K3_API_BASE_URL=os.environ['API'],K3_FIREBASE_API_KEY=d['API_KEY'],K3_FIREBASE_APP_ID=d['GOOGLE_APP_ID'],K3_FIREBASE_SENDER_ID=d['GCM_SENDER_ID'],K3_FIREBASE_PROJECT_ID=d['PROJECT_ID'],K3_FIREBASE_STORAGE_BUCKET=d.get('STORAGE_BUCKET',''))
+          pathlib.Path(os.environ['RUNNER_TEMP'],'release.json').write_text(json.dumps(vals))
+          PY
+      - name: Install distribution identity and provisioning profiles
+        env:
+          CERT: ${{ secrets.K3_IOS_DISTRIBUTION_P12_B64 }}
+          CERT_PASSWORD: ${{ secrets.K3_IOS_DISTRIBUTION_P12_PASSWORD }}
+          MAIN_PROFILE: ${{ secrets.K3_IOS_MAIN_PROFILE_B64 }}
+          EXT_PROFILE: ${{ secrets.K3_IOS_EXTENSION_PROFILE_B64 }}
+        run: |
+          set -euo pipefail
+          umask 077
+          cd "$RUNNER_TEMP"
+          printf '%s' "$CERT" | base64 -D > distribution.p12
+          PASSWORD=$(openssl rand -hex 32)
+          security create-keychain -p "$PASSWORD" release.keychain
+          security unlock-keychain -p "$PASSWORD" release.keychain
+          security set-keychain-settings -lut 7200 release.keychain
+          security import distribution.p12 -k release.keychain -P "$CERT_PASSWORD" -T /usr/bin/codesign
+          security set-key-partition-list -S apple-tool:,apple: -s -k "$PASSWORD" release.keychain
+          security list-keychains -d user -s "$RUNNER_TEMP/release.keychain" 
+          security find-identity -v -p codesigning release.keychain | grep 'Apple Distribution'
+          printf '%s' "$MAIN_PROFILE" | base64 -D > main.mobileprovision
+          printf '%s' "$EXT_PROFILE" | base64 -D > extension.mobileprovision
+          for profile in main extension; do
+            security cms -D -i "$profile.mobileprovision" > "$profile.plist"
+          done
+          python3 - <<'PY'
+          import plistlib,pathlib,datetime
+          ids=['com.cnu.doctor','com.cnu.doctor.OneSignalNotificationServiceExtension']
+          profiles={}
+          dest=pathlib.Path.home()/'Library/MobileDevice/Provisioning Profiles'
+          dest.mkdir(parents=True,exist_ok=True)
+          for name,bundle in zip(['main','extension'],ids):
+              d=plistlib.loads(pathlib.Path(name+'.plist').read_bytes())
+              assert d['TeamIdentifier']==['KJ5MJLJ9C9']
+              assert d['ExpirationDate']>datetime.datetime.utcnow()
+              assert d['Entitlements']['application-identifier']=='KJ5MJLJ9C9.'+bundle
+              assert not d['Entitlements'].get('get-task-allow') and 'ProvisionedDevices' not in d and not d.get('ProvisionsAllDevices')
+              (dest/(d['UUID']+'.mobileprovision')).write_bytes(pathlib.Path(name+'.mobileprovision').read_bytes())
+              profiles[bundle]=d['UUID']
+          pathlib.Path('ExportOptions.plist').write_bytes(plistlib.dumps(dict(method='app-store-connect',teamID='KJ5MJLJ9C9',signingStyle='manual',signingCertificate='Apple Distribution',provisioningProfiles=profiles)))
+          PY
+      - name: Configure target-specific signing
+        run: |
+          ruby -rxcodeproj -rplist -e 'p=Xcodeproj::Project.open("ios/Runner.xcodeproj"); profiles=Plist.parse_xml(File.join(ENV.fetch("RUNNER_TEMP"),"ExportOptions.plist")).fetch("provisioningProfiles"); p.targets.each{|t| t.build_configurations.each{|c| s=c.build_settings; id=s["PRODUCT_BUNDLE_IDENTIFIER"]; next unless profiles.key?(id); s["CODE_SIGN_STYLE"]="Manual"; s["DEVELOPMENT_TEAM"]="KJ5MJLJ9C9"; s["CODE_SIGN_IDENTITY"]="Apple Distribution"; s["PROVISIONING_PROFILE_SPECIFIER"]=profiles[id] }}; p.save'
+      - name: Build signed IPA
+        env:
+          VERSION: ${{ inputs.version_name }}
+          BUILD: ${{ inputs.build_number }}
+        run: |
+          flutter pub get --enforce-lockfile
+          dart run build_runner build --delete-conflicting-outputs
+          python3 tools/k3_rewrite_generated_url.py
+          flutter build ipa --release --build-name="$VERSION" --build-number="$BUILD" --dart-define=K3_BUILD_ENV=production --dart-define-from-file="$RUNNER_TEMP/release.json" --export-options-plist="$RUNNER_TEMP/ExportOptions.plist"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: care360-plus-signed-ipa
+          path: build/ios/ipa/*.ipa
+          if-no-files-found: error
+          retention-days: 3
+      - name: Cleanup signing material
+        if: always()
+        run: |
+          security delete-keychain "$RUNNER_TEMP/release.keychain" || true
+          rm -f "$RUNNER_TEMP"/{distribution.p12,main.mobileprovision,extension.mobileprovision,main.plist,extension.plist,release.json,ExportOptions.plist} ios/Runner/GoogleService-Info.plist
