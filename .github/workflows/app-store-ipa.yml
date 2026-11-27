@@ -95,6 +95,7 @@ jobs:
           VERSION: ${{ inputs.version_name }}
           BUILD: ${{ inputs.build_number }}
         run: |
+          flutter config --enable-swift-package-manager
           flutter pub get --enforce-lockfile
           dart run build_runner build --delete-conflicting-outputs
           python3 tools/k3_rewrite_generated_url.py
